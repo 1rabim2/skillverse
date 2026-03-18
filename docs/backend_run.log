@@ -1,0 +1,4 @@
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+Connecting to MongoDB at: mongodb://127.0.0.1:27017/skillverse
+Connected to embedded MongoDB (data persisted at: C:\Users\acer\Desktop\skillverse\.data\mongo)
+Server running on port 4000

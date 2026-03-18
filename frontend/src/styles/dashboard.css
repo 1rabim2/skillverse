@@ -1,0 +1,69 @@
+:root{
+  --indigo: #4F46E5;
+  --light: #EEF2FF;
+  --gold: #FACC15;
+  --muted: #6B7280;
+}
+
+body { font-family: Inter, system-ui, Arial, sans-serif; }
+
+.sv-dashboard { display:flex; min-height:100vh; background: linear-gradient(180deg,#fff,#f8fafc); }
+.sv-sidebar { width:220px; background: linear-gradient(180deg,var(--light),#fff); padding:24px; box-shadow: 4px 0 10px rgba(15,23,42,0.03); }
+.sv-logo { font-weight:700; color:var(--indigo); font-size:20px; margin-bottom:18px }
+.sv-logo span{ color:var(--gold) }
+.sv-sidebar ul{ list-style:none; padding:0 }
+.sv-sidebar li{ margin-bottom:6px }
+.sv-sidebar a{ display:block; padding:10px 8px; border-radius:8px; cursor:pointer; color:var(--muted); text-decoration:none }
+.sv-sidebar a.active, .sv-sidebar a:hover{ background: rgba(79,70,229,0.06); color:var(--indigo); }
+.sv-sidebar .logout{ margin-top:16px; color:#ef4444 }
+
+.sv-main { flex:1; display:flex; flex-direction:column }
+.sv-header { display:flex; justify-content:space-between; align-items:center; padding:20px 24px; background: linear-gradient(90deg, rgba(255,255,255,0.6), rgba(255,255,255,0.3)); box-shadow: 0 1px 0 rgba(15,23,42,0.03); }
+.sv-greet { font-size:18px }
+.sv-search { padding:8px 12px; border-radius:999px; border:1px solid #e5e7eb }
+.sv-icon-btn{ position:relative; border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:8px; cursor:pointer; display:flex; align-items:center; justify-content:center }
+.sv-notif{ position:relative }
+.sv-notif-badge{ position:absolute; top:-6px; right:-6px; background:var(--indigo); color:#fff; font-size:11px; font-weight:800; border-radius:999px; padding:2px 6px; min-width:20px; text-align:center; border:2px solid #fff }
+.sv-notif-menu{ position:absolute; right:0; top:44px; width:360px; max-width:calc(100vw - 40px); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 18px 40px rgba(15,23,42,0.10); overflow:hidden; z-index:50 }
+.sv-notif-head{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eef2f7 }
+.sv-notif-title{ font-weight:800 }
+.sv-notif-link{ border:none; background:transparent; color:var(--indigo); font-weight:700; font-size:12px; cursor:pointer }
+.sv-notif-list{ max-height:340px; overflow:auto }
+.sv-notif-item{ padding:10px 12px; border-bottom:1px solid #f1f5f9 }
+.sv-notif-click{ width:100%; text-align:left; border:none; background:transparent; padding:0; cursor:pointer }
+.sv-notif-item.unread{ background:rgba(79,70,229,0.06) }
+.sv-notif-item:hover{ background:rgba(15,23,42,0.03) }
+.sv-notif-item-top{ display:flex; align-items:center; justify-content:space-between; gap:10px }
+.sv-notif-item-title{ font-weight:800; font-size:13px }
+.sv-notif-item-msg{ color:#334155; font-size:13px; margin-top:2px; line-height:1.4 }
+.sv-notif-item-time{ color:#94a3b8; font-size:11px; margin-top:6px }
+.sv-notif-actions{ display:flex; justify-content:flex-end; margin-top:6px }
+.sv-notif-empty{ padding:14px 12px; color:#64748b; font-size:13px }
+.sv-dot{ width:8px; height:8px; border-radius:999px; background:var(--indigo); flex:0 0 auto }
+.sv-avatar { width:36px;height:36px;border-radius:50%;background:var(--indigo);color:#fff;display:flex;align-items:center;justify-content:center }
+
+.sv-content{ padding:24px; max-width:1100px; margin:0 auto }
+.sv-progress-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; margin-bottom:20px }
+.sv-card{ background:#fff; padding:16px; border-radius:12px; box-shadow: 0 6px 18px rgba(15,23,42,0.03) }
+.progress-bar{ background:#f3f4f6; height:8px; border-radius:999px; overflow:hidden }
+.progress-bar > div{ height:100%; background: linear-gradient(90deg,var(--indigo),var(--gold)); border-radius:999px }
+
+.sv-carousel{ display:flex; gap:12px; overflow:auto; padding:12px 0 }
+.sv-course{ min-width:220px; background:#fff; padding:12px; border-radius:12px; box-shadow:0 8px 22px rgba(15,23,42,0.04); transition: transform .15s ease }
+.sv-course:hover{ transform: translateY(-6px) }
+.thumb{ height:90px; background: linear-gradient(120deg,var(--indigo),var(--gold)); border-radius:8px; margin-bottom:8px }
+.small-progress{ background:#f3f4f6; height:6px; border-radius:8px; margin:8px 0; overflow:hidden }
+.small-progress > div{ height:100%; background:linear-gradient(90deg,var(--indigo),var(--gold)); }
+
+.sv-grid{ display:grid; grid-template-columns: 1fr 360px; gap:20px; margin-top:20px }
+.sv-achievements .badge{ display:flex; align-items:center; gap:8px; padding:8px; background:#fff; border-radius:8px; margin-bottom:8px }
+.sv-cta{ background:var(--indigo); color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer }
+
+.sv-motivation{ margin-top:24px; background: linear-gradient(90deg, rgba(79,70,229,0.08), rgba(250,204,21,0.06)); padding:18px; border-radius:12px; display:flex; justify-content:space-between; align-items:center }
+
+/* Responsive */
+@media(max-width:900px){
+  .sv-sidebar{ display:none }
+  .sv-progress-grid{ grid-template-columns: 1fr }
+  .sv-grid{ grid-template-columns: 1fr }
+}

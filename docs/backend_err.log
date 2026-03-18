@@ -1,0 +1,3 @@
+Initial MongoDB connection failed: connect ECONNREFUSED 127.0.0.1:27017
+Falling back to embedded MongoDB for local development
+NOTE: This embedded MongoDB is for local development and stores data in .data/mongo.

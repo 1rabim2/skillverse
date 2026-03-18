@@ -1,0 +1,270 @@
+﻿Final Year Project Proposal
+Skill Verse â€“ A Career-Focused E-Learning Platform
+Submitted by: Rabim Kc
+Uni ID: 2414192
+Supervisor: Saroj D Shrestha
+Reader: Gunjan Kumar Mishra
+Contents
+Introduction:3
+Aims and Objectives:5
+Objectives:5
+Problem Statement:6
+Project as a Solution:7
+Scope and Limitations:9
+Functional Decomposition Diagram:11
+Artifacts - Explanation of Subsystems:12
+Literature Review:15
+Chosen Software Development Methodology.25
+Chosen Tools and Technology:28
+Introduction:
+The Skill Verse is an interactive e learning web platform designed to make online education more structured, engaging and career focused. Unlike other e learning systems which only provide random courses. Skill Verse provides skill pathsauto generated learner portfolio and community interaction. The platform allows students to enroll in courses watch video lessons, complete quizzes, track the process and earn certificates. At the same time, it creates a professional portfolio for each learner showcasing their achievements and making them more employable.
+This project falls under the domain of web development in the field of educational technology. It combines both frontend development (react, tailwind CSS) and backend technologies (node.js, express, mongo dB) to deliver a full stack web solution. It also incorporates user experience (UX) principles and modern web features such as gamification, progress trackingand PDF certificate generation.
+Education is also moving to online and blended learning models. However, most elearning sites are characterized by high dropout ratesabsence of learning courses and low interaction with learners. Research indicates that over 80% of the students fail to deliver on the courses they enroll into and this is mainly because of lack of motivation and or no clear progression. Moreover, where Englishonly platforms are use such as in Nepal, it acts as a barrier to learners whose first language is the local language and who need or desire to use it. Skill Verse is a direct answer to these concerns since it offers roadmap-based frameworks, engagement options, bilingually and career-oriented features such as certificates and portfolios.
+The idea for Skill Verse was motivated by two main factors:
+Global Need for Structured, Career-Ready Learning:The available platforms such as Udemy and Coursera do offer thousands of courses, but the learners lack a way to follow their path and be guided. Skill Verse seeks to offer learners guided skills through paths and avenues of learning and offer tools to demonstrate their learning outcomes.
+Local Challenges in Nepal: Most of the e-learning platforms are English-only and this poses a challenge to many Nepali students who want to access quality e-learning materials. Skill Verse also enables inclusion and access to e-learning by incorporating multilingual assistance (English and Nepali).
+Aims and Objectives:
+The aim of this project is to design and develop a career-focused learning platform that provides structured learning paths, supports bilingual content, and generates learner portfolios to improve motivation, accessibility, and employability.
+Objectives:
+Objective 1: To implement a course management system that allows admins to create, update and organize courses into categories and structured skill paths.The system will provide a minimum of 3-4 skill paths by the completion of the first sprint which will provide a systematized learning process and solve the problem of unorganized content.
+Objective 2: Implement interactive learning features using React.js, Node.js and PDF in Sprint 2, including quizzes, progress tracking and auto-generated certificates upon course completion to enhance learner engagement, motivation and progress assessment.
+Objective 3: Develop a dynamic portfolio system using MongoDB and React.js by Sprint 3, which automatically records completed courses, skill paths, and certificates into a professional learner profile, ensuring every learner has a shareable portfolio upon completing at least one skill path, helping them effectively showcase their skills.
+Objective 4: Enhance learner engagement by Sprint 4 through gamification and community interaction features, including at least three gamification elements (XP points, badges, streaks) and one community feature (peer Q&A), implemented with backend logic and a React-based UI, to reduce dropout rates and improve motivation.
+Objective 5: Integrate multilingual content using i18n frameworks with React by the final development stage, providing a language toggle and translated course content in at least two languages (English and Nepali) to improve accessibility for non-English learners.
+Problem Statement:
+Lack of structure and direction of most platforms is one of the biggest problems in the e-learning industry. Thousands of standalone courses are often offered to learners without any clear guidelines as to which courses to take and in the order of doing so, or how to integrate them to meet career objectives. This disorganization confuses, overwhelms and ultimately demotivates most learners.
+The major issue is the incompetence of the learners to demonstrate the skills learnt. Students who have taken various online courses are usually given only digital certificates even after finishing the coursesand these do not play a significant role in showing their general learning outcomes or employment readiness.
+Also, in places like Nepal, the vast majority of international e-learning sites are in English language only and that excludes the students who prefer to learn in their own language. This creates unequal exposure to knowledge and locks out great number of learners who may have otherwise enjoyed e-learning.
+These issues should be addressed since the future of learning is more digital, and should learners fail to remain relevant, pursue structured paths, and demonstrate their capabilities. the point of e-learning will have been wasted. This directly impacts students, job seekersand professionals who find it difficult to remain motivated, graduate, and demonstrate their skills on the job market.
+Thus, a demand arises to implement an e-learning platform covering structured skill paths, bilingual support, gamified interaction, and dynamic portfolios to enable learners not only to gain knowledge but also to develop career readiness.
+Project as a Solution:
+Skill Verse is the proposed project which directly solves the issues related to the existing e-learning environment, being a career-oriented, interactive, lean-based learning ecosystem.
+First, to address the problem of unorganized education, Skill Verse presents Skill Paths-a guided roadmap that organizes courses in a rational progression between the beginner level and the advanced level. This makes learners aware of what to learn next and it enables them to accumulate some knowledge in a given area they choose. Skill Paths unlike other platforms available now, offer a structured and goal-oriented course evolution where learners choose courses arbitrarily.
+Second, to address the issue of low engagement and high dropout rates the platform combines gamification and community interaction. Learners can get points, badges, and streaks when they finish lessons and they feel more motivated to do so. Community Q&A forum enables students to ask questions, share their knowledge and help each other.
+Third, Skill Verse is solving the issue of skill demonstration with the implementation of a dynamic portfolio system. Skills, projects, and achievements are automatically added to the portfolio of the learners as they take courses and receive certificates. This portfolio can serve as a professional profile that may be shared with employers and can bridge the knowledge gap between learning and employability.
+Fourth, the platform is multilingual (English + Nepali), which makes e-learning more inclusive among the local learners. Skill Verse removes the barrier to access that many students face in the quest to access online education by providing content in both global and local languages
+Innovative Aspects Over Existing Solutions
+Structured Skill Paths: Unlike Udemy or Coursera, which offer standalone courses, Skill Verse provides roadmaps for guided career growth.
+Dynamic Portfolio: Goes beyond certificates by creating a professional learner profile automatically.
+Community Skill Exchange: Adds peer-to-peer learning, missing in many traditional platforms.
+Localized Learning: Supports English and Nepali, making it inclusive for local learners.
+Gamification: Uses rewards, badges, and leaderboards to motivate learners to complete courses.
+Scope and Limitations:
+Scope:
+The proposed project, Skill Verse, will focus on developing a web-based e-learning platform with the following features:
+User Authentication: Registration and login for students and admins.
+Course Management: Admins can create, update, and organize courses under different categories and structured skill paths.
+Learning System: Learners can watch video lessons, read notes, and download resources.
+Quizzes and Assessments: Each course will include interactive quizzes to test learner understanding.
+Progress Tracking: Learners will be able to view their learning progress through dashboards and analytics.
+Certification: Auto-generated certificates will be awarded upon course or skill path completion.
+Dynamic Portfolio: Learner achievements and certificates will be automatically compiled into a portfolio.
+Gamification: Learners will be motivated through points, badges, streaks, and leaderboards.
+Community Forum: A Q&A and discussion board will allow peer-to-peer learning and support.
+Multilingual Support: The platform will support English and Nepali languages.
+Limitations:
+While the project aims to provide a robust system, certain limitations are acknowledged to ensure realistic expectations:
+No Mobile App in Phase 1: The project will only be developed as a web application, though it will be responsive for mobile browsers. A dedicated mobile app may be considered in future versions.
+No Live Class Integration: Real-time video lectures or live sessions (e.g., Zoom/Google Meet integration) will not be part of the initial version due to complexity and resource requirements.
+Limited AI Functionality: Advanced AI features such as personalized course recommendations or automated grading will not be implemented in the first version but may be added later.
+Limited Payment Integration: While the system will simulate course enrollment, full-scale payment gateways (e.g., PayPal/Stripe) may not be integrated in Phase 1, as the focus is on learning features rather than monetization.
+Content Creation: The platform will support course uploads, but the scope does not include creating original course content. Sample or demo courses will be provided for testing.
+Functional Decomposition Diagram:
+Artifacts - Explanation of Subsystems:
+The system that is proposed is called Skill Verse and it consists of a number of interconnected subsystems. The subsystems also feature prominently in the provision of well structured, interactive and career-oriented e-learning on the platform.
+User Management Subsystem.
+Function: Handles registration, login, authenticationand profile management.
+Input/Output:
+Input: User credentials (username, email, password).
+Output: Authentication tokens, user profiles.
+Tools: Firebase Auth / JWT, React.js forms.
+Dependencies: Database for storing user data.
+Challenges: Ensuring secure authentication and protecting against unauthorized access.
+Users Involved: Students and Admins.
+Course Management Subsystem.
+Function: Allows admins to create, update, categorize, and delete courses.
+Input/Output:
+Input: Course title, description, video uploads, resources.
+Output: Course listings for learners.
+Tools: Node.js, MongoDB, React.js interface.
+Dependencies: Database storage for course materials.
+Challenges: Efficient storage of video files and categorization of courses.
+Users Involved: Admins manage, students consume.
+Learning Subsystem.
+Function: Delivers course content such as video lectures, notesand downloadable resources.
+Input/Output:
+Input: Course enrollment by learners.
+Output: Interactive lessons, notes, and downloadable files.
+Tools: React.js video player, cloud storage for resources.
+Dependencies: Course management subsystem.
+Challenges: Smooth video playback and user-friendly navigation.
+Users Involved: Students.
+Assessment Subsystem.
+Function: Provides quizzes, evaluates responses, and gives instant feedback.
+Input/Output:
+Input: Quiz responses from learners.
+Output: Scores, correct/incorrect feedback.
+Tools: React.js forms, Node.js backend validation.
+Dependencies: Linked with the Learning subsystem.
+Challenges: Designing fair and randomized question banks.
+Users Involved: Students.
+Progress Tracking Subsystem.
+Function: Tracks course completion percentage, quiz results, and generates progress dashboards.
+Input/Output:
+Input: Lesson completions, quiz results.
+Output: Progress bars, analytics charts.
+Tools: Chart.js for visualizations, MongoDB for tracking.
+Dependencies: Learning and Assessment subsystems.
+Challenges: Real-time updates and clear visual representation of progress.
+Users Involved: Students.
+Certification & Portfolio Subsystem.
+Function: Generates certificates and automatically builds learner portfolios.
+Input/Output:
+Input: Completed courses/skill paths.
+Output: Certificates (PDF), portfolio profiles.
+Tools: jsPDF for certificates, React.js for portfolio.
+Dependencies: Progress tracking subsystem.
+Challenges: Designing professional-looking certificates and ensuring portfolio accuracy.
+Users Involved: Students.
+Community Subsystem.
+Function: Provides Q&A forums and peer-to-peer knowledge sharing.
+Input/Output:
+Input: Student questions, answers, discussions.
+Output: Shared knowledge, peer interaction.
+Tools: Node.js (backend forum), React.js (frontend).
+Dependencies: User management for identity verification.
+Challenges: Moderating spam or inappropriate content.
+Users Involved: Students and Admins (moderators).
+Gamification Subsystem.
+Function: Enhances engagement through XP points, streaks, badges, and leaderboards.
+Input/Output:
+Input: Student activity (completed lessons, quizzes).
+Output: Gamification rewards, rankings.
+Tools: Node.js logic, React.js UI components.
+Dependencies: Learning and Progress Tracking subsystems.
+Challenges: Designing fair scoring rules and keeping learners motivated without distractions.
+Users Involved: Students.
+Literature Review:
+Dropout in Online Higher Education.
+Student dropout in online higher education has been a thorn in the flesh, and global completion rates of online courses have been reported to be below 20%. provide a systematic review of the literature summarizing the current literature on factors in online learning environments that contribute to dropout. They consider poor course design, lack of interactivity, weak social support, and low learner motivation to be the key factors in their review. According to them, online students, who tend to be working adults or to have several tasks at once, are especially susceptible to lack of engagement when course pathways are not clearly defined or where support systems are not available.
+One of the most meaningful contributions to the field that Rahmani et al. might make is its classification of factors contributing to dropouts into student-related (motivation, self-discipline), environment-related (time, resources, technology access), and course-related (structure, pedagogy, instructor feedback) factors. The topicality of creating learning platforms capable of not only imparting content, but also providing movement and community also features prominently in this category. Notably, the review emphasizes that dropout is a defect of the system and not only a failure of a learner.
+this analysis justifies the significance of a guided learning course and dynamic learner support systems. On the Skill Verse, these results provided a rationale to launch Skill Paths to offer clarity and guidance, community forums to maintain motivation, and gamification capabilities. By tackling the major dropout drivers described by Rahmani et al., Skill Verse will position itself as a platform capable of addressing retention and learner success to the extent that existing systems frequently fall short of doing so.
+Gamification in Higher Education.
+Gamification is now one of the most researched approaches to enhance online learner engagement. Khaldi et al. (2023) performed a systematic review of gamification in higher education and analyzed dozens of empirical studies that introduced such features as points, leaderboards, badges, and levels. Their results agree that gamification always has a positive impact on motivation, participation and time-on-task when the mechanics are relevantly related to the learning outcomes. The review, though, warns that superficial gamification (when the rewards are not connected with actual learning gains) can reduce intrinsic motivation and encourage chasing points.
+The key things that are learned during the review are that gamification is most useful where there are specific goals and objectives, there are feedback mechanisms, and there are social interactions. To illustrate this point, badges indicating accomplishment of meaningful milestones or leaderboards promoting healthy competition among peer groups were found to be more beneficial than generic rewards. In addition, long-term engagement was found to be maintained by adaptive gamification, in which the difficulty of the challenge increases as the learner advances.
+In the case of Skill Verse, the implications of the findings by Khadji et al. are quite obvious. Gamification needs not be a separate entity but must be embedded within Skill Paths, progress dashboards and portfolio achievements. Skill Verse prevents superficial interaction and learning by providing rewards to learners as they successfully pass through structured milestones or offer services to the community, which are linked to genuine learning targets. This is what makes gamification a key yet pedagogically based aspect of the platform.
+Impact of Gamification on School Engagement.
+In a systematic review, Ruiz et al. (2024) broaden the scope in terms of the contribution of gamification to education, both in school and higher-education settings. Their study established that gamification enhances the engagement of learners as it boosts their level of participation, perseverance or enjoyment of the learning process. Interestingly, the review notes that the effect of gamification is particularly strong in online learning contexts, where there is a greater dropout rate and students do not feel the same sense of responsibility as they do in a real classroom.
+Here the study places the results of gamification in three categories: behavioral engagement (attendance, time spent), emotional engagement (enjoyment, reduced anxiety), and cognitive engagement (deeper focus, problem-solving skills). Behavioral engagement turned out to be the most influenced, and it is assuming that gamification might be an incredibly potent way of making sure that learners are engaged, but it should not be referred to as an alternative to massive design.
+In the case of Skill Verse, the results presented by Ruiz et al. give a solid argument in favor of implementing habit-forming games like streaks, challenges of the day, and micro-rewards to make sure learners stay. Meanwhile, these mechanics need to be coupled with meaningful learning in the platform to facilitate cognitive engagement. By integrating the knowledge of Ruiz et al. (2024) with the original emphasis of Skill Verse on career-driven skill paths, gamification cannot be reduced to the issue of ensuring that learners spend more time on the Internet but rather consume more of the content that is relevant to their careers and helps them build it.
+E-Portfolios in Higher Education.
+E-portfolios have proliferated during the pandemic as a way to demonstrate student learning outside of traditional examination. When conducting a systematic review of e-portfolio practice, Zhang et al. (2024) focused on reflection, skills identification, and employability. The review established that portfolios were useful to students as self-assessment and identity-building tools and that portfolios were considered by employers to be more authentic indicators of competence than traditional certificates.
+However, the review also reveals issues: the uneven introduction of the practice into the work of institutions, the lack of uniformity of the standards of assessment, and the overloading of the work of learners and teachers. The other significant finding is that, most portfolio systems are not fully used due to manual updating carried out by learners resulting in unfinished or obsolete profile.
+Those failings are precisely what Skill Verse tries to address with the help of auto-generated portfolios. With each course a learner takes, quiz they pass, and certificate they get, their portfolio is automatically updated, reducing the amount of manual effort and ensuring accuracy. Not only does this design make portfolios more sustainable, but it also meets industry requirements of current, verifiable evidence of skills. In this way, Skill Verse extends the results of Zhang et al. to develop a more viable, scalable, and effective strategy of digital portfolios.
+Learning Analytics and Personalization.
+Cabi et al. (2025) investigated which impacts a learning-analytics-based feedback system has on student performance. Their research focused on a flipped-classroom setting showed that delivery of analytics dashboards and customized feedback to learners significantly enhanced self-regulated learning behaviors and learner performance. The article emphasizes the strength of making analytics doablenot only what learners have done but also what they should work on next.
+One of the key contributions of this work is that it focuses on feedback loops: students who obtained analytics-based feedback changed their studying behaviors more efficiently than students who only checked their achievement percentages. It also points to the fact that dashboards can be more than progress meters, that they can be learning companions.
+Skill Verse is directly informed by these insights by incorporating progress tracking dashboards that not only show course completion, but also recommend the next step in a skill path. Skill Verse is able to keep learners on track towards career-relevant goals by turning analytics into guidance.
+Existing Systems.
+Coursera.
+Coursera is a global leader and one of the largest online platforms of e-learning, providing courses, specializations, and degrees in partnership with universities and companies. Its competitive advantages are in its scholarly plausibility and formal programs, specifically Specializations and professional certificates that direct students through several courses toward a specified set of skills. Other career-centered offerings that Coursera has incorporated include employer alliances and resume critiques.
+But Coursera has weaknesses as well. Its most valuable programs have paywalls that restrict access to learners in low-income areas. Also, Coursera is still more of an English-based platform, which makes it less accessible to non-English learners. The concept of gamification and community engagement is also still relatively underdeveloped in comparison to tools such as Duolingo or SoloLearn, where motivation among learners is dependent on self-discipline.
+Coursera points out inspiration and gaps. The usefulness of organized programs is obvious, yet Skill Verse brings it to a higher level by launching less dense, modular Skill Paths that are comfortable and affordable. Moreover, Skill Verse offers Coursera access controls and bilingual content incentivization based on gamification. Skill Verse provides a more comprehensive approach to student success because it incorporates academic architecture with inclusion and interaction.
+Udemy.
+Udemy is the largest online learning marketplace with over 200,000 courses on different topics, including technology and lifestyle. Its greatest asset is that it is comprehensive and affordable: anybody can buy an individual course at comparatively low cost and lecturers worldwide can post content. This liberal open marketplace model democratizes instruction and gives the learner a wide choice. Also, Udemy provides lifetime access when one buys a course that enables the learner to go through it at his or her own pace.
+But the same marketplace model generates huge disadvantages. Due to a lack of centralized quality control, the quality of courses is highly unstable. Some teachers are very good, whereas others are not pedagogically competent and therefore lack consistency. In addition, Udemy does not have learning pathways--students can buy courses without a defined path to career-ready results. None would grant formal certificates of completion, which are less credible than university-approved courses such as Coursera.
+Udemy is both an opportunity and a case study in the context of Skill Verse. Its broad scope of topics shows there is a need to have flexible and versatile learning options, yet Skill Verse adds to it through the use of Skill Paths which tie courses into career-oriented, guided-learning sequences. Also, Skill Verse has built-in gamification, progress tracking, and auto-generated portfolios which Udemy does not offer at the moment. By doing so, Skill Verse integrates the ease and scope of Udemy with the format and interaction required to ensure long-term learner success.
+Khan Academy.
+Khan Academy has become one of the most successful free educational online sources offering high-quality educational resources to millions of students all over the world. It is particularly applicable in low resource settings, where the system can be deployed to serve millions of students who do not have access to other types of formal education.
+Khan Academy has weaknesses in spite of these strengths. It is still mostly centered on school-level courses, i.e. it does not specifically train students to have professional or career-related skills. There are no certificates and formal recognition of achievements and this restricts the role of the activity in employability. The platform also includes mastery tracking and progress dashboards, but lacks the advanced gamification and community-based interaction with peers that other platforms such as Duolingo or SoloLearn have.
+Skill Verse example uses adaptive mastery learning and accessibility by Khan Academy as the inspiration. But Skill Verse is not only limited to academic fundamentals and concentrates on career-oriented skills paths, certifications, and auto-generated portfolios. This will not only help the learners to accumulate knowledge but also earn credentials that are valuable in the employment sector. Skill Verse creates a platform that would assist students in learning throughout their lives and developing their career combining both the advantages of the Khan Academy related to accessibility and employability characteristics.
+Duolingo.
+Duolingo is now recognized as a leader in gamified microlearning, and most specifically in the field of language education. Its strong points are obvious: very active gamification (the use of XP points, streaks, badges, and leaderboards) and very short lessons, which are taken every day and promote learning habits. The design of Duolingo shows how properly developed gamification can make e-learning a usual practice. Its free access and mobile first nature have enabled it to become one of the most popular educational applications in the world.
+Along with these advantages, Duolingo has some limitations: it is a limited app that specializes in language learning only. Employers do not recognize certificates and never heard of portfolios. Furthermore, the design of gamification, though incredibly successful in the context of motivating people to use it on a daily basis, occasionally focuses on the preservation of streaks rather than more profound learning results.
+In the case of Skill Verse, Duolingo can teach us a valuable lesson: engagement leads to perseverance. Skill Verse can further improve retention within career-oriented education by incorporating gamification of Duolingo such as streaks, badges, and micro-rewards. Unlike Duolingo, though, Skill Verse attaches these mechanics to skill milestones and portfolios, so that engagement is translated into professional skill growth. In this way, Skill Verse, basing on the motivational success of Duolingo, meets its constraints by implementing gamification, but in a more professional setting.
+SoloLearn
+SoloLearn is a mobile-first application focused on programming learning via micro-lessons and practice problems via a community feed. Its main advantage is in its community factor: learners receive an opportunity to share a code, to ask questions and learn together with each other. This social learning model encourages less intimidation when coding and has peer support at all times.
+But, SoloLearn has drawbacks in a number of ways. It has a limited area of application, and its attention is given almost solely to computer science and coding. Though useful to beginners, it does not include multi-course sequences that lead to level or work-ready outcomes. Certificates are non-formal and not well-known and there is no dynamic portfolio to demonstrate accumulated skills. The gamification elements are fairly basic compared to Duolingo, and lack effective incentive to long-term commitment.
+Skill Verse builds on the success of SoloLearn in its community learning and delivery of micro-content and grows much larger. It expands the areas of subject matter beyond those of coding, opens new career-focused Skill Paths, and integrates auto-evolving portfolios that formally record the achievements of learners. Using the same peer-generated support and structured, professional results, Skill Verse expands upon the community base of SoloLearn, which suffers from being too narrow, too poorly known, and progressively lacking in development.
+Chosen Software Development Methodology.
+Selected Methodology: Agile Scrum.
+The methodology chosen for this project is Agile Scrum. Scrum is particularly suited to projects that require iterative development, flexibility, and continuous feedback, which aligns perfectly with the needs of Skill Verse.
+Justification for Choice.
+iterative Development: Skill Verse consists of multiple independent features (authentication, course management, quizzes, portfolios, community, gamification). Scrum allows these to be developed in short iterations (sprints), ensuring continuous progress.
+Flexibility: Since requirements may evolve during the project (e.g., adjusting features based on supervisor feedback), Scrum provides flexibility to incorporate changes without disrupting the overall project.
+Continuous Feedback: Each sprint delivers a working module that can be tested and reviewed, ensuring that the system is aligned with user expectations and project goals.
+Risk Management: By breaking the project into smaller increments, risks are identified early, and necessary changes can be made before full deployment.
+Timeline Alignment and Iteration Expectations
+The project will be divided into four sprints each lasting approximately 2â€“3 weeks. Each sprint will focus on delivering a working set of features:
+Sprint 1: User Management + Course Browsing (Authentication, Profiles, Course Listings)
+Sprint 2: Learning Subsystem (Video Lessons, Notes) + Assessments (Quizzes)
+Sprint 3: Progress Tracking + Certificates + Dynamic Portfolio
+Sprint 4: Community Forum + Gamification + Multilingual Support
+Each sprint will end with testing and integration of features into the main system.
+Work Breakdown Structure (WBS).
+Skill Verse E-Learning Platform
+User Management.
+Registration/Login.
+Profiles & Roles.
+Authentication.
+Course Management.
+Course Creation.
+Categorization.
+Skill Path Setup.
+Learning Subsystem.
+Video Lessons.
+Notes & Resources.
+Assessment Subsystem.
+Quizzes.
+Feedback.
+Progress Tracking.
+Progress Bar.
+Analytics Dashboard.
+Certification & Portfolio.
+Certificate Generator.
+Portfolio Profile.
+Community Subsystem.
+Q&A Forum.
+Peer Exchange.
+Gamification Subsystem.
+Points & Badges.
+Leaderboards.
+Streak Counter.
+Gantt Chart (High-Level).
+Chosen Tools and Technology:
+Programming Language.
+JavaScript (ES6+).
+Justification: JavaScript is the core language for both frontend and backend web development. It allows full-stack development using a single language across the project. Its asynchronous nature makes it highly efficient for handling real-time user interactions in an e-learning platform.
+Frameworks & Libraries.
+React.js (Frontend).
+Justification: React provides a component-based architecture, reusability, and fast rendering with a virtual DOM. This ensures a responsive and interactive user interface, which is critical for engaging learners.
+Tailwind CSS (Styling).
+Justification: Tailwind enables utility-first, responsive, and modern design with minimal code, ensuring a clean and consistent UI/UX.
+Node.js with Express.js (Backend).
+Justification: Node.js is lightweight and event-driven, ideal for handling multiple requests simultaneously. Express.js simplifies backend development by providing APIs, middleware, and routing features needed for Skill Verse.
+Chart.js (Analytics Visualization).
+Justification: Used to display learnersâ€™ progress and performance in graphical formats, making progress tracking more intuitive.
+Database.
+MongoDB (NoSQL Database).
+Justification: MongoDB provides flexible schema design, scalability, and efficient handling of unstructured data like course content, user activity, and progress tracking. Its JSON-like documents integrate seamlessly with JavaScript.
+Authentication & Security.
+Firebase Authentication / JWT (JSON Web Tokens).
+Justification: Provides secure login and signup with support for email, Google, and social login. JWT ensures safe session management for learners and admins.
+Certificate Generation.
+jsPDF.
+Justification: A lightweight JavaScript library for generating professional-looking PDF certificates dynamically once a learner completes a course or skill path.
+Version Control.
+Git & GitHub.
+Justification: Git is the industry standard for version control, ensuring collaboration, history tracking, and safe backups. GitHub allows cloud-based code hosting, issue tracking, and project management.
+IDE (Integrated Development Environment).
+Visual Studio Code (VS Code).
+Justification: A free, lightweight, and powerful IDE with support for JavaScript, Node.js, and React. It provides extensions for debugging, Git integration, and linting.
+Design & Prototyping Tools.
+Figma.
+Justification: Enables the creation of high-fidelity UI/UX prototypes for planning and designing the platform before development. Supports collaboration and feedback.
+Icons & Visual Assets.
+Lucide Icons / Font Awesome
+Justification: Open-source, modern, and lightweight icon packs that enhance UI design by providing visual clarity and improving navigation.
+Project Management Tools.
+Jira.
+Justification: Useful for managing Scrum boards, sprint planning, and task assignments, ensuring smooth progress tracking and project organization.

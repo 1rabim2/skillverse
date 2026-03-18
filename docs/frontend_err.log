@@ -1,0 +1,10 @@
+[2m8:23:44 AM[22m [33m[1m[vite][22m[39m [33mwarning: [33mThe character ">" is not valid inside a JSX element[33m
+55 |                    <div className="sv-pill">In progress</div>
+56 |                  </div>
+57 |                  <div className="sv-mock-sub">This week: Flexbox -> Responsive layout</div>
+   |                                                                   ^
+58 |                  <div className="sv-progress" role="presentation">
+59 |                    <div className="sv-progress-bar" style={{ width: '62%' }} />
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/acer/Desktop/skillverse/frontend/src/pages/Landing.jsx[39m
