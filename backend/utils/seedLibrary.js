@@ -1,6 +1,265 @@
 const Course = require('../models/Course');
 const SkillPath = require('../models/SkillPath');
 
+function toTitleSlug(title) {
+  return String(title || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 60);
+}
+
+function buildCurriculum({ title, category, resourceLink, videoUrl }) {
+  const safeTitle = String(title || 'Course').trim() || 'Course';
+  const safeCategory = String(category || 'General').trim() || 'General';
+  const link = String(resourceLink || '').trim();
+  const vid = String(videoUrl || '').trim();
+  const slug = toTitleSlug(safeTitle);
+
+  const practiceSuggestionsByCategory = {
+    'Web Fundamentals': 'Build a simple personal landing page using semantic HTML and basic CSS. Add one interactive JavaScript feature (e.g., theme toggle).',
+    Frontend: 'Build a small UI (e.g., todo app) and practice component structure, state management, and routing.',
+    Backend: 'Build a small REST API with 2–3 endpoints, add validation, and test with Postman/Thunder Client.',
+    Database: 'Create a small schema, insert sample data, and write a few queries/aggregations. Then model it in Mongoose.',
+    Tools: 'Create a repo, commit frequently, open a PR, and practice branching + merge workflow.',
+    General: 'Take notes while learning and build a small project to apply what you learned.'
+  };
+
+  const practice = practiceSuggestionsByCategory[safeCategory] || practiceSuggestionsByCategory.General;
+
+  const interestingVideoByCategory = {
+    'Web Fundamentals': 'https://www.youtube.com/watch?v=G3e-cpL7ofc',
+    Frontend: 'https://www.youtube.com/watch?v=bMknfKXIFA8',
+    Backend: 'https://www.youtube.com/watch?v=Oe421EPjeBE',
+    Database: 'https://www.youtube.com/watch?v=-56x56UppqQ',
+    Tools: 'https://www.youtube.com/watch?v=RGOj5yH7evk',
+    General: ''
+  };
+  const interestingVideo = interestingVideoByCategory[safeCategory] || '';
+
+  const finalExamQuestions = [
+    {
+      prompt: `Which statement best describes the main goal of "${safeTitle}"?`,
+      options: ['To memorize syntax only', 'To understand concepts and apply them in practice', 'To avoid building projects', 'To learn unrelated topics'],
+      correctIndex: 1,
+      explanation: 'The goal is understanding + application through practice.'
+    },
+    {
+      prompt: 'When learning from official docs, what is the best approach?',
+      options: ['Skip examples', 'Copy-paste without understanding', 'Read, try examples, and take notes', 'Only watch videos'],
+      correctIndex: 2,
+      explanation: 'Hands-on practice + notes helps retention and skill-building.'
+    },
+    {
+      prompt: 'What should you do when something doesn’t work as expected?',
+      options: ['Ignore errors', 'Guess randomly', 'Use debugging and read error messages', 'Delete the project'],
+      correctIndex: 2,
+      explanation: 'Debugging is a core skill; errors guide you to the fix.'
+    },
+    {
+      prompt: 'Which outcome is a good sign you completed the course well?',
+      options: ['You finished the reading only', 'You built a small project/practice task', 'You never tried anything', 'You skipped the final quiz'],
+      correctIndex: 1,
+      explanation: 'Practice is required to convert knowledge into skill.'
+    },
+    {
+      prompt: 'Why is it important to understand fundamentals before advanced topics?',
+      options: ['It is not important', 'Fundamentals help you reason and debug', 'Advanced topics replace fundamentals', 'Only fundamentals exist'],
+      correctIndex: 1,
+      explanation: 'Strong fundamentals make everything else easier.'
+    },
+    {
+      prompt: 'If you want to learn faster, which habit helps most?',
+      options: ['Never take notes', 'Build tiny projects regularly', 'Avoid questions', 'Only read headlines'],
+      correctIndex: 1,
+      explanation: 'Small projects force you to apply concepts and reveal gaps.'
+    },
+    {
+      prompt: 'Which is the best way to validate your understanding?',
+      options: ['Explain the concept in your own words', 'Hide your code', 'Skip practice', 'Avoid quizzes'],
+      correctIndex: 0,
+      explanation: 'If you can explain it, you understand it.'
+    },
+    {
+      prompt: 'When you finish a section of docs, what is a good next step?',
+      options: ['Rewrite the docs', 'Try one variation of the example', 'Stop learning', 'Delete your notes'],
+      correctIndex: 1,
+      explanation: 'Tweaking examples builds intuition.'
+    },
+    {
+      prompt: 'What should the final certificate represent?',
+      options: ['Time spent only', 'Passing the final exam with enough marks', 'Skipping assessments', 'Random completion'],
+      correctIndex: 1,
+      explanation: 'Certificate should be based on passing the final exam.'
+    },
+    {
+      prompt: 'If you fail the final exam, what should you do?',
+      options: ['Give up', 'Review the weak topics and retake', 'Delete your account', 'Ignore feedback'],
+      correctIndex: 1,
+      explanation: 'Use the score + explanations to focus on weak areas, then retry.'
+    }
+  ];
+
+  // Create a richer curriculum (real links + practice + final exam quiz)
+  return [
+    {
+      title: 'Orientation',
+      order: 1,
+      lessons: [
+        {
+          title: 'Welcome & outcomes',
+          type: 'reading',
+          content:
+            `You will learn the key concepts for: ${safeTitle}.\n\n` +
+            `How to complete this course:\n` +
+            `1) Follow the official resource links.\n` +
+            `2) Do the practice tasks.\n` +
+            `3) Pass the Final Exam quiz to earn the certificate.`,
+          durationMin: 8,
+          order: 1
+        },
+        {
+          title: 'Watch an explainer (video)',
+          type: 'video',
+          content: 'Watch the explainer video, then return and continue with the official resource.',
+          videoUrl: vid || interestingVideo,
+          resourceLink: '',
+          durationMin: 20,
+          order: 2
+        }
+      ]
+    },
+    {
+      title: 'Core Learning (Official)',
+      order: 2,
+      lessons: [
+        {
+          title: 'Read: official guide',
+          type: 'reading',
+          content:
+            link
+              ? `Open the official guide and complete the key sections. Take notes and try the examples.\n\nTip: keep a small notes file with “What I learned” + “Questions”.`
+              : 'Complete the official reading for this topic and take notes.',
+          resourceLink: link,
+          durationMin: 45,
+          order: 1
+        },
+        {
+          title: 'Mini practice',
+          type: 'project',
+          content: practice,
+          resourceLink: link,
+          durationMin: 35,
+          order: 2
+        },
+        {
+          title: 'Checkpoint quiz',
+          type: 'quiz',
+          content: 'Quick checkpoint to ensure you understood the basics. Pass to mark this lesson complete.',
+          durationMin: 10,
+          order: 3,
+          quiz: {
+            passPercent: 60,
+            questions: [
+              {
+                prompt: 'What is the best next step after reading a section?',
+                options: ['Move on immediately', 'Try the example and change it', 'Close the browser', 'Skip practice'],
+                correctIndex: 1,
+                explanation: 'Trying + modifying examples builds real understanding.'
+              },
+              {
+                prompt: 'What should you do if you feel stuck?',
+                options: ['Stop completely', 'Search the docs and read error messages', 'Delete everything', 'Avoid debugging'],
+                correctIndex: 1,
+                explanation: 'Docs + errors are your best helpers.'
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      title: 'Project',
+      order: 3,
+      lessons: [
+        {
+          title: 'Project brief',
+          type: 'reading',
+          content:
+            `Build a small project that proves you can apply ${safeTitle}.\n\n` +
+            `Requirements:\n- Small but complete\n- Uses what you learned\n- You can explain your choices`,
+          durationMin: 10,
+          order: 1
+        },
+        {
+          title: 'Build the project',
+          type: 'project',
+          content:
+            `Implement the project now.\n\n` +
+            `Suggested approach:\n` +
+            `- Start with a simple version\n` +
+            `- Add features one by one\n` +
+            `- Test after each change`,
+          durationMin: 60,
+          order: 2
+        },
+        {
+          title: 'Polish & review',
+          type: 'reading',
+          content:
+            `Review your work:\n` +
+            `- Can you explain each part?\n` +
+            `- Can you fix one bug quickly?\n` +
+            `- Is your code readable?\n` +
+            `Then move to the Final Exam.`,
+          durationMin: 12,
+          order: 3
+        }
+      ]
+    },
+    {
+      title: 'Final Exam',
+      order: 4,
+      lessons: [
+        {
+          title: 'Exam review (video)',
+          type: 'video',
+          content: 'Watch the review video and recap your notes before attempting the final exam.',
+          videoUrl: interestingVideo,
+          resourceLink: link,
+          durationMin: 15,
+          order: 1
+        },
+        {
+          title: 'Final Exam',
+          type: 'quiz',
+          content:
+            `Pass this exam to earn the certificate.\n\n` +
+            `Rules:\n- Passing score: 70%\n- You can retry if you fail\n\n` +
+            `Tip: if you fail, review the official resource and try again.`,
+          durationMin: 20,
+          order: 2,
+          videoUrl: interestingVideo,
+          resourceLink: link,
+          quiz: {
+            passPercent: 70,
+            questions: finalExamQuestions
+          }
+        },
+        {
+          title: 'Next steps',
+          type: 'reading',
+          content:
+            `Great job.\n\n` +
+            `Next:\n- Continue to the next course in this skill path.\n- Keep building small projects.`,
+          durationMin: 8,
+          order: 3
+        }
+      ]
+    }
+  ];
+}
+
 const LIBRARY = [
   {
     title: 'Web Foundations',
@@ -159,11 +418,30 @@ async function upsertSkillPath({ title, description }) {
   return { skillPath: created, created: true };
 }
 
-async function upsertCourse({ adminId, skillPathId, course }) {
+async function upsertCourse({ adminId, skillPathId, course, force }) {
   const existing = await Course.findOne({ title: course.title });
   if (existing) {
-    // Keep it simple: if a course exists by title, leave it as-is.
-    return { course: existing, created: false };
+    // If a course exists by title, only hydrate missing curriculum (chapters).
+    let updated = false;
+    if (force && Array.isArray(course.chapters) && course.chapters.length > 0) {
+      existing.chapters = course.chapters;
+      updated = true;
+    } else if ((!Array.isArray(existing.chapters) || existing.chapters.length === 0) && Array.isArray(course.chapters) && course.chapters.length > 0) {
+      existing.chapters = course.chapters;
+      updated = true;
+    }
+    // Ensure published for the student-facing app.
+    if (existing.status !== 'published') {
+      existing.status = 'published';
+      updated = true;
+    }
+    // Keep the course attached to the skillPath if missing.
+    if (!existing.skillPath && skillPathId) {
+      existing.skillPath = skillPathId;
+      updated = true;
+    }
+    if (updated) await existing.save();
+    return { course: existing, created: false, updated };
   }
   const created = await Course.create({
     title: course.title,
@@ -174,20 +452,22 @@ async function upsertCourse({ adminId, skillPathId, course }) {
     videoUrl: course.videoUrl,
     resourceLink: course.resourceLink,
     thumbnailUrl: '',
+    chapters: Array.isArray(course.chapters) ? course.chapters : [],
     skillPath: skillPathId,
     createdBy: adminId || null
   });
-  return { course: created, created: true };
+  return { course: created, created: true, updated: false };
 }
 
 async function seedLibrary({ adminId, force = false } = {}) {
   const existingCount = await Course.countDocuments();
   if (!force && existingCount > 0) {
-    return { skipped: true, reason: 'Courses already exist', skillPathsCreated: 0, coursesCreated: 0 };
+    return { skipped: true, reason: 'Courses already exist', skillPathsCreated: 0, coursesCreated: 0, coursesUpdated: 0 };
   }
 
   let skillPathsCreated = 0;
   let coursesCreated = 0;
+  let coursesUpdated = 0;
 
   for (const sp of LIBRARY) {
     // eslint-disable-next-line no-await-in-loop
@@ -196,9 +476,14 @@ async function seedLibrary({ adminId, force = false } = {}) {
 
     const createdCourseIds = [];
     for (const c of sp.courses) {
+      const courseWithCurriculum = {
+        ...c,
+        chapters: buildCurriculum(c)
+      };
       // eslint-disable-next-line no-await-in-loop
-      const { course, created } = await upsertCourse({ adminId, skillPathId: skillPath._id, course: c });
+      const { course, created, updated } = await upsertCourse({ adminId, skillPathId: skillPath._id, course: courseWithCurriculum, force });
       if (created) coursesCreated += 1;
+      if (updated) coursesUpdated += 1;
       createdCourseIds.push(course._id);
     }
 
@@ -213,7 +498,7 @@ async function seedLibrary({ adminId, force = false } = {}) {
     await skillPath.save();
   }
 
-  return { skipped: false, skillPathsCreated, coursesCreated };
+  return { skipped: false, skillPathsCreated, coursesCreated, coursesUpdated };
 }
 
 module.exports = { seedLibrary, LIBRARY };

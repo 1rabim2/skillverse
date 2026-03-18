@@ -1,11 +1,8 @@
 import React from 'react'
-import Sidebar from '../components/Sidebar'
-import HeaderBar from '../components/HeaderBar'
 import ProgressOverview from '../components/ProgressOverview'
 import CourseCarousel from '../components/CourseCarousel'
 import Achievements from '../components/Achievements'
 import MotivationBanner from '../components/MotivationBanner'
-import '../styles/dashboard.css'
 import { API_BASE } from '../lib/apiBase'
 
 function AccessMessage({ isAdminOnly }) {
@@ -120,34 +117,33 @@ export default function Dashboard(){
   const recentActivity = data?.recentActivity || []
 
   return (
-    <div className="sv-dashboard">
-      <Sidebar onLogout={logout} />
-      <div className="sv-main">
-        <HeaderBar user={user} onLogout={logout} />
-        <main className="sv-content">
-          <ProgressOverview stats={stats} />
-          <section className="sv-section">
-            <h2>Continue Learning</h2>
-            <CourseCarousel courses={courses} />
-          </section>
-
-          <div className="sv-grid">
-            <Achievements badges={badges} />
-            <div className="sv-community">
-              <h3>Recent Activity</h3>
-              <ul>
-                {recentActivity.map((item, idx) => (
-                  <li key={`${item.type}-${idx}`}>{item.message}</li>
-                ))}
-                {recentActivity.length === 0 && <li>No recent activity yet.</li>}
-              </ul>
-              <button className="sv-cta">Go to Community</button>
-            </div>
-          </div>
-
-          <MotivationBanner />
-        </main>
+    <>
+      <div className="sv-pagehead">
+        <div>
+          <div className="sv-subtitle">Welcome back, <strong>{user?.name || 'Student'}</strong></div>
+        </div>
       </div>
-    </div>
+      <ProgressOverview stats={stats} />
+      <section className="sv-section">
+        <h2>Continue Learning</h2>
+        <CourseCarousel courses={courses} />
+      </section>
+
+      <div className="sv-grid">
+        <Achievements badges={badges} />
+        <div className="sv-community">
+          <h3>Recent Activity</h3>
+          <ul>
+            {recentActivity.map((item, idx) => (
+              <li key={`${item.type}-${idx}`}>{item.message}</li>
+            ))}
+            {recentActivity.length === 0 && <li>No recent activity yet.</li>}
+          </ul>
+          <button className="sv-cta">Go to Community</button>
+        </div>
+      </div>
+
+      <MotivationBanner />
+    </>
   )
 }

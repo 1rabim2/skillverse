@@ -6,7 +6,12 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+if (!process.env.JWT_SECRET) {
+  console.error('Missing JWT_SECRET. Create backend/.env (see backend/.env.example) and set JWT_SECRET to a strong random value.');
+  process.exit(1);
+}
 
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -127,6 +132,16 @@ async function ensureDefaultAdmin() {
 
 async function startServer() {
   async function connect(uri) {
+    // If a previous connect attempt is still "active" (connecting/connected),
+    // reset before trying a different connection string.
+    if (mongoose.connection.readyState !== 0) {
+      try {
+        await mongoose.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+
     const connectPromise = mongoose.connect(uri, {
       // Keep local dev responsive when a remote cluster is unreachable.
       serverSelectionTimeoutMS: 4000,
@@ -152,6 +167,12 @@ async function startServer() {
     console.log('Connected to MongoDB');
   } catch (err) {
     console.warn('Initial MongoDB connection failed:', err.message);
+
+    try {
+      await mongoose.disconnect();
+    } catch {
+      // ignore
+    }
 
     async function startEmbeddedMongo() {
       const dataDir = path.join(__dirname, '..', '.data', 'mongo');

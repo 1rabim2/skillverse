@@ -69,50 +69,49 @@ export default function Certificates() {
   if (error) return <div style={{ padding: 24 }}>Could not load certificates: {error}</div>;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0b1220', color: '#e5e7eb', padding: 24 }}>
-      <div style={{ maxWidth: 980, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ margin: 0 }}>My Certificates</h1>
-            <p style={{ marginTop: 8, color: '#94a3b8' }}>Certificates issued after completing courses.</p>
-          </div>
-          <button
-            onClick={() => (window.location.href = '/dashboard')}
-            style={{ border: '1px solid #334155', background: 'transparent', color: '#e5e7eb', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
-          >
-            Back to Dashboard
-          </button>
+    <div className="sv-section" style={{ overflow: 'hidden' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div>
+          <h2 style={{ marginTop: 0, marginBottom: 6 }}>My Certificates</h2>
+          <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>Certificates issued after completing courses.</p>
         </div>
+        <button className="sv-cta" onClick={() => (window.location.href = '/dashboard')}>Back to Dashboard</button>
+      </div>
 
-        <div style={{ marginTop: 16, background: '#0f172a', border: '1px solid #1f2a44', borderRadius: 16, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#0b1220' }}>
-                <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid #1f2a44' }}>Certificate ID</th>
-                <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid #1f2a44' }}>Course</th>
-                <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid #1f2a44' }}>Issued</th>
+      <div style={{ marginTop: 14, borderRadius: 12, border: '1px solid rgba(15,23,42,0.08)', overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'rgba(15,23,42,0.03)' }}>
+              <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid rgba(15,23,42,0.08)' }}>Certificate ID</th>
+              <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid rgba(15,23,42,0.08)' }}>Course</th>
+              <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid rgba(15,23,42,0.08)' }}>Score</th>
+              <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid rgba(15,23,42,0.08)' }}>Issued</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((c) => (
+              <tr key={c._id || c.certificateId} style={{ borderBottom: '1px solid rgba(15,23,42,0.06)' }}>
+                <td style={{ padding: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
+                  {c.certificateId}
+                </td>
+                <td style={{ padding: 12 }}>{c.course?.title || 'Course'}</td>
+                <td style={{ padding: 12, color: '#334155' }}>
+                  {typeof c.scorePercent === 'number'
+                    ? `${c.scorePercent}%${typeof c.passPercent === 'number' ? ` (pass ${c.passPercent}%)` : ''}`
+                    : '-'}
+                </td>
+                <td style={{ padding: 12 }}>{c.issuedAt ? new Date(c.issuedAt).toLocaleString() : '-'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {items.map((c) => (
-                <tr key={c._id || c.certificateId} style={{ borderBottom: '1px solid rgba(31,42,68,0.7)' }}>
-                  <td style={{ padding: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
-                    {c.certificateId}
-                  </td>
-                  <td style={{ padding: 12 }}>{c.course?.title || 'Course'}</td>
-                  <td style={{ padding: 12 }}>{c.issuedAt ? new Date(c.issuedAt).toLocaleString() : '-'}</td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={3} style={{ padding: 12, color: '#94a3b8' }}>
-                    No certificates yet. Complete a course to generate one.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={4} style={{ padding: 12, color: '#64748b' }}>
+                  No certificates yet. Complete a course to generate one.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

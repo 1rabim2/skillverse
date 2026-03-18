@@ -11,6 +11,10 @@ export default function AdminSettings() {
   const [saved, setSaved] = React.useState('');
   const [seeding, setSeeding] = React.useState(false);
   const [seedMsg, setSeedMsg] = React.useState('');
+  const [adminCreate, setAdminCreate] = React.useState({ name: '', email: '', password: '' });
+  const [adminMsg, setAdminMsg] = React.useState('');
+  const [pwForm, setPwForm] = React.useState({ currentPassword: '', newPassword: '' });
+  const [pwMsg, setPwMsg] = React.useState('');
 
   React.useEffect(() => {
     Promise.all([adminApi.get('/settings/gamification'), adminApi.get('/settings/localization')])
@@ -41,7 +45,16 @@ export default function AdminSettings() {
     try {
       const res = await adminApi.post('/seed/library', { force });
       if (res.data?.skipped) setSeedMsg(`Skipped: ${res.data.reason || 'already seeded'}`);
-      else setSeedMsg(`Seeded: ${res.data.coursesCreated || 0} courses, ${res.data.skillPathsCreated || 0} skill paths`);
+      else {
+        const created = res.data?.coursesCreated || 0;
+        const updated = res.data?.coursesUpdated || 0;
+        const paths = res.data?.skillPathsCreated || 0;
+        const parts = [];
+        parts.push(`${created} courses created`);
+        if (updated) parts.push(`${updated} courses updated`);
+        parts.push(`${paths} skill paths`);
+        setSeedMsg(`Seeded: ${parts.join(', ')}`);
+      }
     } catch (err) {
       setSeedMsg(err.response?.data?.error || 'Failed to seed library');
     } finally {
@@ -49,10 +62,42 @@ export default function AdminSettings() {
     }
   }
 
+  async function createAdmin(e) {
+    e.preventDefault();
+    setAdminMsg('');
+    try {
+      await adminApi.post('/admins', {
+        name: adminCreate.name.trim(),
+        email: adminCreate.email.trim(),
+        password: adminCreate.password
+      });
+      setAdminMsg('New admin created');
+      setAdminCreate({ name: '', email: '', password: '' });
+      setTimeout(() => setAdminMsg(''), 2500);
+    } catch (err) {
+      setAdminMsg(err.response?.data?.error || 'Failed to create admin');
+    }
+  }
+
+  async function changeAdminPassword(e) {
+    e.preventDefault();
+    setPwMsg('');
+    try {
+      await adminApi.post('/auth/change-password', pwForm);
+      setPwMsg('Password updated');
+      setPwForm({ currentPassword: '', newPassword: '' });
+      setTimeout(() => setPwMsg(''), 2500);
+    } catch (err) {
+      setPwMsg(err.response?.data?.error || 'Failed to update password');
+    }
+  }
+
   return (
     <div className="space-y-6">
       {saved && <div className="rounded bg-emerald-100 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{saved}</div>}
       {seedMsg && <div className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{seedMsg}</div>}
+      {adminMsg && <div className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{adminMsg}</div>}
+      {pwMsg && <div className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{pwMsg}</div>}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <h3 className="mb-3 text-lg font-semibold">Gamification Settings</h3>
@@ -107,6 +152,65 @@ export default function AdminSettings() {
             Force Reseed
           </button>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <h3 className="mb-3 text-lg font-semibold">Add Admin</h3>
+        <form onSubmit={createAdmin} className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <input
+            className="rounded border border-slate-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+            value={adminCreate.name}
+            onChange={(e) => setAdminCreate((v) => ({ ...v, name: e.target.value }))}
+            placeholder="Name (optional)"
+          />
+          <input
+            className="rounded border border-slate-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+            value={adminCreate.email}
+            onChange={(e) => setAdminCreate((v) => ({ ...v, email: e.target.value }))}
+            placeholder="Admin email"
+            type="email"
+            required
+          />
+          <input
+            className="rounded border border-slate-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+            value={adminCreate.password}
+            onChange={(e) => setAdminCreate((v) => ({ ...v, password: e.target.value }))}
+            placeholder="Temp password"
+            type="password"
+            required
+          />
+          <button className="rounded bg-slate-900 px-4 py-2 text-white dark:bg-slate-100 dark:text-slate-900 md:col-span-3">
+            Create Admin
+          </button>
+        </form>
+        <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+          New admins can log in at <span className="font-mono">/admin/login</span>.
+        </p>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <h3 className="mb-3 text-lg font-semibold">Change Admin Password</h3>
+        <form onSubmit={changeAdminPassword} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <input
+            className="rounded border border-slate-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+            value={pwForm.currentPassword}
+            onChange={(e) => setPwForm((v) => ({ ...v, currentPassword: e.target.value }))}
+            placeholder="Current password"
+            type="password"
+            required
+          />
+          <input
+            className="rounded border border-slate-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+            value={pwForm.newPassword}
+            onChange={(e) => setPwForm((v) => ({ ...v, newPassword: e.target.value }))}
+            placeholder="New password (min 8)"
+            type="password"
+            required
+          />
+          <button className="rounded bg-slate-900 px-4 py-2 text-white dark:bg-slate-100 dark:text-slate-900 md:col-span-2">
+            Update Password
+          </button>
+        </form>
       </section>
     </div>
   );

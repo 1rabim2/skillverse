@@ -2,10 +2,22 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
 const { notifyAllAdmins } = require('../utils/notifications');
+const { OAuth2Client } = require('google-auth-library');
+const rateLimit = require('express-rate-limit');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 function escapeRegExp(string) {
   return String(string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -18,7 +30,7 @@ function emailFilter(email) {
 }
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   try {
     const { name, email, password } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
@@ -52,7 +64,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
@@ -73,6 +85,82 @@ router.post('/login', async (req, res) => {
 
     if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email before logging in' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+
+    const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user._id, email: user.email, name: user.name, role: user.role || 'student' } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Google sign-in (works for both "login" and "signup" UX)
+// Frontend should send the Google Identity Services `credential` (ID token).
+router.post('/google', authLimiter, async (req, res) => {
+  try {
+    if (!googleClient) return res.status(500).json({ error: 'Google auth is not configured (missing GOOGLE_CLIENT_ID)' });
+
+    const { credential } = req.body || {};
+    if (!credential) return res.status(400).json({ error: 'credential required' });
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload() || {};
+    const email = String(payload.email || '').trim().toLowerCase();
+    const emailVerified = !!payload.email_verified;
+    const googleSub = String(payload.sub || '').trim();
+    const name = String(payload.name || '').trim();
+
+    if (!email) return res.status(400).json({ error: 'Google account has no email' });
+    if (!emailVerified) return res.status(403).json({ error: 'Google email is not verified' });
+    if (!googleSub) return res.status(400).json({ error: 'Google token missing sub' });
+
+    const existingBySub = await User.findOne({ googleSub });
+    if (existingBySub && String(existingBySub.email).toLowerCase() !== email) {
+      return res.status(409).json({ error: 'Google account is already linked to another user' });
+    }
+
+    let user = await User.findOne(emailFilter(email));
+
+    if (!user) {
+      // Create a local account tied to Google. We still store a random password hash so that:
+      // - the existing schema (password required) remains valid
+      // - the user can later "reset password" to set an email/password login if desired
+      const randomPassword = crypto.randomBytes(32).toString('hex');
+      const salt = await bcrypt.genSalt(10);
+      const hash = await bcrypt.hash(randomPassword, salt);
+
+      user = new User({
+        name,
+        email,
+        password: hash,
+        isVerified: true,
+        googleSub
+      });
+
+      await user.save();
+
+      notifyAllAdmins({
+        type: 'info',
+        title: 'New user registered (Google)',
+        message: `${user.email} created an account via Google.`,
+        link: '/admin/users',
+        meta: { userId: String(user._id), provider: 'google' }
+      }).catch(() => null);
+    } else {
+      if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+      // If they previously signed up via email but are now using Google, remember the googleSub.
+      if (user.googleSub && user.googleSub !== googleSub) {
+        return res.status(409).json({ error: 'This email is already linked to a different Google account' });
+      }
+      if (!user.googleSub) user.googleSub = googleSub;
+      if (!user.isVerified) user.isVerified = true;
+      if (!user.name && name) user.name = name;
+      await user.save();
+    }
 
     const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user: { id: user._id, email: user.email, name: user.name, role: user.role || 'student' } });
@@ -103,7 +191,7 @@ router.get('/verify', async (req, res) => {
 });
 
 // Resend verification
-router.post('/resend-verification', async (req, res) => {
+router.post('/resend-verification', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
@@ -132,7 +220,7 @@ router.post('/resend-verification', async (req, res) => {
 });
 
 // Forgot password
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
@@ -184,7 +272,7 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // Reset password
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', authLimiter, async (req, res) => {
   try {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ error: 'Token and new password required' });

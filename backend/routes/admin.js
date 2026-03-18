@@ -2,6 +2,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const { OAuth2Client } = require('google-auth-library');
+const rateLimit = require('express-rate-limit');
 const Admin = require('../models/Admin');
 const User = require('../models/User');
 const Course = require('../models/Course');
@@ -26,7 +28,16 @@ function emailFilter(email) {
 }
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+const adminAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 function objectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -36,7 +47,7 @@ function activity(type, message) {
   return ActivityLog.create({ type, message }).catch(() => null);
 }
 
-router.post('/auth/login', async (req, res) => {
+router.post('/auth/login', adminAuthLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -53,8 +64,87 @@ router.post('/auth/login', async (req, res) => {
   }
 });
 
+// Admin Google sign-in (login only; does not create admins automatically)
+router.post('/auth/google', adminAuthLimiter, async (req, res) => {
+  try {
+    if (!googleClient) return res.status(500).json({ error: 'Google auth is not configured (missing GOOGLE_CLIENT_ID)' });
+    const { credential } = req.body || {};
+    if (!credential) return res.status(400).json({ error: 'credential required' });
+
+    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload() || {};
+    const email = String(payload.email || '').trim().toLowerCase();
+    const emailVerified = !!payload.email_verified;
+    const googleSub = String(payload.sub || '').trim();
+
+    if (!email) return res.status(400).json({ error: 'Google account has no email' });
+    if (!emailVerified) return res.status(403).json({ error: 'Google email is not verified' });
+    if (!googleSub) return res.status(400).json({ error: 'Google token missing sub' });
+
+    const admin = await Admin.findOne(emailFilter(email));
+    if (!admin) return res.status(403).json({ error: 'Admin account not found for this email' });
+    if (!admin.isActive) return res.status(403).json({ error: 'Admin is deactivated' });
+
+    if (admin.googleSub && admin.googleSub !== googleSub) {
+      return res.status(409).json({ error: 'This admin email is already linked to a different Google account' });
+    }
+    if (!admin.googleSub) {
+      admin.googleSub = googleSub;
+      await admin.save();
+    }
+
+    const token = jwt.sign({ id: admin._id, email: admin.email, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, admin: { id: admin._id, name: admin.name, email: admin.email } });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 router.get('/auth/me', adminAuth, async (req, res) => {
   res.json({ admin: req.admin });
+});
+
+router.post('/auth/change-password', adminAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'currentPassword and newPassword required' });
+    if (String(newPassword).length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+
+    const admin = await Admin.findById(req.admin._id);
+    if (!admin || !admin.isActive) return res.status(403).json({ error: 'Admin not allowed' });
+
+    const match = await bcrypt.compare(String(currentPassword), admin.password);
+    if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
+
+    admin.password = await bcrypt.hash(String(newPassword), 10);
+    await admin.save();
+
+    await activity('admin_password_changed', `Admin changed password: ${admin.email}`).catch(() => null);
+    res.json({ message: 'Password updated' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Create another admin (requires existing admin token)
+router.post('/admins', adminAuth, async (req, res) => {
+  try {
+    const { name, email, password } = req.body || {};
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const safeName = String(name || '').trim() || 'Admin';
+    if (!normalizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
+
+    const existing = await Admin.findOne(emailFilter(normalizedEmail));
+    if (existing) return res.status(409).json({ error: 'Admin already exists' });
+
+    const hash = await bcrypt.hash(String(password), 10);
+    const admin = await Admin.create({ name: safeName, email: normalizedEmail, password: hash, isActive: true });
+
+    await activity('admin_created', `Admin created: ${admin.email}`).catch(() => null);
+    res.status(201).json({ admin: { id: admin._id, name: admin.name, email: admin.email, isActive: admin.isActive } });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 router.get('/dashboard/overview', adminAuth, async (req, res) => {

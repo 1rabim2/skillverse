@@ -1,9 +1,10 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 module.exports = async function adminAuth(req, res, next) {
+  if (!JWT_SECRET) return res.status(500).json({ error: 'Server misconfigured (missing JWT_SECRET)' });
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'No token provided' });
 

@@ -250,12 +250,12 @@ export default function CourseDetail() {
   const quizPassed = !!(quizResult?.passed || latestQuiz?.passed);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0b1220', color: '#e5e7eb', padding: 24 }}>
-      <div style={{ maxWidth: 980, margin: '0 auto' }}>
+    <div style={{ width: '100%', color: '#0f172a' }}>
+      <div style={{ width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ margin: 0 }}>{course.title}</h1>
-            <p style={{ marginTop: 8, color: '#94a3b8' }}>
+            <p style={{ marginTop: 8, color: '#64748b' }}>
               {(course.level || 'Beginner')} | {(course.category || 'General')}
               {course.skillPath?.title ? ` | Skill Path: ${course.skillPath.title}` : ''}
             </p>
@@ -263,13 +263,13 @@ export default function CourseDetail() {
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button
               onClick={() => (window.location.href = '/dashboard')}
-              style={{ border: '1px solid #334155', background: 'transparent', color: '#e5e7eb', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
+              style={{ border: '1px solid rgba(15,23,42,0.14)', background: '#fff', color: '#0f172a', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
             >
               Back to Dashboard
             </button>
             <button
               onClick={() => (window.location.href = '/certificates')}
-              style={{ border: '1px solid #334155', background: 'transparent', color: '#e5e7eb', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
+              style={{ border: '1px solid rgba(15,23,42,0.14)', background: '#fff', color: '#0f172a', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
             >
               My Certificates
             </button>
@@ -277,22 +277,22 @@ export default function CourseDetail() {
         </div>
 
         {hasLessons ? (
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '0.55fr 1.45fr', gap: 16 }}>
-            <div style={{ background: '#0f172a', border: '1px solid #1f2a44', borderRadius: 16, padding: 16 }}>
+          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'minmax(280px, 360px) 1fr', gap: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid rgba(15,23,42,0.08)', boxShadow: '0 10px 30px rgba(15,23,42,0.05)', borderRadius: 16, padding: 16 }}>
               <h3 style={{ marginTop: 0, marginBottom: 10 }}>Curriculum</h3>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: 13 }}>
                 <span>Progress</span>
                 <span>{Math.min(100, progress.percent || 0)}%</span>
               </div>
-              <div style={{ height: 10, borderRadius: 999, overflow: 'hidden', background: '#0b1220', border: '1px solid #243047', marginTop: 8 }}>
-                <div style={{ height: '100%', width: `${Math.min(100, progress.percent || 0)}%`, background: 'linear-gradient(90deg,#22c55e,#38bdf8)' }} />
+              <div style={{ height: 10, borderRadius: 999, overflow: 'hidden', background: '#f1f5f9', border: '1px solid rgba(15,23,42,0.08)', marginTop: 8 }}>
+                <div style={{ height: '100%', width: `${Math.min(100, progress.percent || 0)}%`, background: 'linear-gradient(90deg,#4F46E5,#FACC15)' }} />
               </div>
-              <div style={{ marginTop: 10, color: '#94a3b8', fontSize: 12 }}>
+              <div style={{ marginTop: 10, color: '#64748b', fontSize: 12 }}>
                 {completedSet.size} / {total} lessons completed
               </div>
 
               {!token && (
-                <div style={{ marginTop: 12, padding: 12, borderRadius: 12, border: '1px solid #243047', background: '#0b1220', color: '#cbd5e1', fontSize: 13 }}>
+                <div style={{ marginTop: 12, padding: 12, borderRadius: 12, border: '1px solid rgba(15,23,42,0.08)', background: '#f8fafc', color: '#334155', fontSize: 13 }}>
                   Sign in to enroll, take quizzes, and track progress.
                 </div>
               )}
@@ -312,7 +312,7 @@ export default function CourseDetail() {
                   .sort((a, b) => (a.order || 0) - (b.order || 0))
                   .map((ch) => (
                     <div key={ch._id || ch.title} style={{ marginTop: 12 }}>
-                      <div style={{ fontWeight: 800, color: '#e5e7eb', marginBottom: 6 }}>{ch.title || 'Chapter'}</div>
+                      <div style={{ fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>{ch.title || 'Chapter'}</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {(ch.lessons || [])
                           .slice()
@@ -332,9 +332,9 @@ export default function CourseDetail() {
                                   textAlign: 'left',
                                   borderRadius: 12,
                                   padding: '10px 10px',
-                                  border: `1px solid ${active ? '#38bdf8' : '#243047'}`,
-                                  background: active ? 'rgba(56,189,248,0.10)' : '#0b1220',
-                                  color: '#e5e7eb',
+                                  border: `1px solid ${active ? 'rgba(79,70,229,0.55)' : 'rgba(15,23,42,0.12)'}`,
+                                  background: active ? 'rgba(79,70,229,0.08)' : '#fff',
+                                  color: '#0f172a',
                                   cursor: 'pointer'
                                 }}
                               >
@@ -342,7 +342,7 @@ export default function CourseDetail() {
                                   <div style={{ fontWeight: 750, fontSize: 13 }}>
                                     {ls.title || 'Lesson'}
                                   </div>
-                                  <div style={{ fontSize: 12, color: done ? '#22c55e' : '#94a3b8' }}>{done ? 'Done' : (ls.type || 'reading')}</div>
+                                  <div style={{ fontSize: 12, color: done ? '#16a34a' : '#64748b' }}>{done ? 'Done' : (ls.type || 'reading')}</div>
                                 </div>
                               </button>
                             );
@@ -353,21 +353,21 @@ export default function CourseDetail() {
               </div>
             </div>
 
-            <div style={{ background: '#0f172a', border: '1px solid #1f2a44', borderRadius: 16, padding: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid rgba(15,23,42,0.08)', boxShadow: '0 10px 30px rgba(15,23,42,0.05)', borderRadius: 16, padding: 16 }}>
               <h3 style={{ marginTop: 0, marginBottom: 6 }}>{selectedLesson?.title || course.title}</h3>
               {selected?.chapter?.title && (
-                <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 10 }}>
+                <div style={{ color: '#64748b', fontSize: 13, marginBottom: 10 }}>
                   {selected.chapter.title}
                 </div>
               )}
               {course.description && (
-                <p style={{ color: '#cbd5e1', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginTop: 0 }}>
+                <p style={{ color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginTop: 0 }}>
                   {course.description}
                 </p>
               )}
 
               {selectedLesson?.content && (
-                <div style={{ marginTop: 10, color: '#cbd5e1', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                <div style={{ marginTop: 10, color: '#334155', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                   {selectedLesson.content}
                 </div>
               )}
@@ -375,12 +375,12 @@ export default function CourseDetail() {
               {(selectedLesson?.videoUrl || selectedLesson?.resourceLink) && (
                 <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {selectedLesson?.videoUrl && (
-                    <a href={selectedLesson.videoUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>
+                    <a href={selectedLesson.videoUrl} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: 800 }}>
                       Open video
                     </a>
                   )}
                   {selectedLesson?.resourceLink && (
-                    <a href={selectedLesson.resourceLink} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>
+                    <a href={selectedLesson.resourceLink} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: 800 }}>
                       Open resource
                     </a>
                   )}
@@ -388,14 +388,14 @@ export default function CourseDetail() {
               )}
 
               {selectedQuiz && (
-                <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #243047' }}>
+                <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(15,23,42,0.08)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                     <h4 style={{ margin: 0 }}>Quiz</h4>
-                    <div style={{ fontSize: 12, color: '#94a3b8' }}>Pass: {selectedQuiz.passPercent || 60}%</div>
+                    <div style={{ fontSize: 12, color: '#64748b' }}>Pass: {selectedQuiz.passPercent || 60}%</div>
                   </div>
 
                   {!token && (
-                    <div style={{ marginTop: 10, padding: 12, borderRadius: 12, border: '1px solid #243047', background: '#0b1220', color: '#cbd5e1', fontSize: 13 }}>
+                    <div style={{ marginTop: 10, padding: 12, borderRadius: 12, border: '1px solid rgba(15,23,42,0.08)', background: '#f8fafc', color: '#334155', fontSize: 13 }}>
                       Sign in to submit this quiz.
                     </div>
                   )}
@@ -403,13 +403,13 @@ export default function CourseDetail() {
                   {token && (
                     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {selectedQuizQuestions.map((q, idx) => (
-                        <div key={q._id || idx} style={{ border: '1px solid #243047', background: '#0b1220', borderRadius: 14, padding: 12 }}>
+                        <div key={q._id || idx} style={{ border: '1px solid rgba(15,23,42,0.08)', background: '#f8fafc', borderRadius: 14, padding: 12 }}>
                           <div style={{ fontWeight: 750, marginBottom: 8 }}>
                             {idx + 1}. {q.prompt}
                           </div>
                           <div style={{ display: 'grid', gap: 8 }}>
                             {(q.options || []).map((opt, oIdx) => (
-                              <label key={`${idx}-${oIdx}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', color: '#cbd5e1' }}>
+                              <label key={`${idx}-${oIdx}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', color: '#0f172a' }}>
                                 <input
                                   type="radio"
                                   name={`q-${idx}`}
@@ -435,8 +435,8 @@ export default function CourseDetail() {
                           disabled={quizSubmitting || !enrolled}
                           onClick={() => submitQuiz(String(selectedLesson._id))}
                           style={{
-                            background: enrolled ? '#38bdf8' : '#334155',
-                            color: '#082f49',
+                            background: enrolled ? '#4F46E5' : '#cbd5e1',
+                            color: enrolled ? '#fff' : '#475569',
                             border: 'none',
                             borderRadius: 12,
                             padding: '12px 14px',
@@ -450,9 +450,9 @@ export default function CourseDetail() {
                           disabled={updating || !enrolled || isLessonCompleted || (selectedQuizQuestions.length > 0 && !quizPassed)}
                           onClick={() => completeLesson(String(selectedLesson._id))}
                           style={{
-                            background: isLessonCompleted ? '#22c55e' : '#0b1220',
-                            color: isLessonCompleted ? '#052e16' : '#e5e7eb',
-                            border: `1px solid ${isLessonCompleted ? '#22c55e' : '#243047'}`,
+                            background: isLessonCompleted ? '#22c55e' : '#fff',
+                            color: isLessonCompleted ? '#052e16' : '#0f172a',
+                            border: `1px solid ${isLessonCompleted ? '#22c55e' : 'rgba(15,23,42,0.12)'}`,
                             borderRadius: 12,
                             padding: '12px 14px',
                             cursor: isLessonCompleted ? 'default' : 'pointer',
@@ -464,11 +464,11 @@ export default function CourseDetail() {
                       </div>
 
                       {(quizResult || latestQuiz) && (
-                        <div style={{ padding: 12, borderRadius: 12, border: '1px solid #243047', background: '#0b1220', color: '#cbd5e1' }}>
+                        <div style={{ padding: 12, borderRadius: 12, border: '1px solid rgba(15,23,42,0.08)', background: '#f8fafc', color: '#334155' }}>
                           <div style={{ fontWeight: 800, color: (quizResult?.passed || latestQuiz?.passed) ? '#22c55e' : '#f59e0b' }}>
                             {(quizResult?.passed || latestQuiz?.passed) ? 'Passed' : 'Not passed yet'}
                           </div>
-                          <div style={{ marginTop: 4, fontSize: 13, color: '#94a3b8' }}>
+                          <div style={{ marginTop: 4, fontSize: 13, color: '#64748b' }}>
                             Score: {(quizResult?.scorePercent ?? latestQuiz?.scorePercent ?? 0)}% ({(quizResult?.correct ?? latestQuiz?.correct ?? 0)}/{(quizResult?.total ?? latestQuiz?.total ?? 0)} correct)
                           </div>
                         </div>
@@ -499,7 +499,7 @@ export default function CourseDetail() {
               )}
 
               {actionMsg && (
-                <div style={{ marginTop: 12, background: '#0b1220', border: '1px solid #243047', borderRadius: 12, padding: 10, color: '#e5e7eb' }}>
+                <div style={{ marginTop: 12, background: '#f8fafc', border: '1px solid rgba(15,23,42,0.08)', borderRadius: 12, padding: 10, color: '#0f172a' }}>
                   {actionMsg}
                 </div>
               )}
@@ -507,14 +507,14 @@ export default function CourseDetail() {
           </div>
         ) : (
           <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: 16 }}>
-            <div style={{ background: '#0f172a', border: '1px solid #1f2a44', borderRadius: 16, padding: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid rgba(15,23,42,0.08)', boxShadow: '0 10px 30px rgba(15,23,42,0.05)', borderRadius: 16, padding: 16 }}>
               <h3 style={{ marginTop: 0 }}>About this course</h3>
-              <p style={{ color: '#cbd5e1', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{course.description || 'No description yet.'}</p>
+              <p style={{ color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{course.description || 'No description yet.'}</p>
 
               {course.videoUrl && (
                 <div style={{ marginTop: 14 }}>
                   <h4 style={{ marginBottom: 8 }}>Video</h4>
-                  <a href={course.videoUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>
+                  <a href={course.videoUrl} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: 800 }}>
                     Open video link
                   </a>
                 </div>
@@ -523,17 +523,17 @@ export default function CourseDetail() {
               {course.resourceLink && (
                 <div style={{ marginTop: 14 }}>
                   <h4 style={{ marginBottom: 8 }}>Resources</h4>
-                  <a href={course.resourceLink} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>
+                  <a href={course.resourceLink} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: 800 }}>
                     Open resource link
                   </a>
                 </div>
               )}
             </div>
 
-            <div style={{ background: '#0f172a', border: '1px solid #1f2a44', borderRadius: 16, padding: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid rgba(15,23,42,0.08)', boxShadow: '0 10px 30px rgba(15,23,42,0.05)', borderRadius: 16, padding: 16 }}>
               <h3 style={{ marginTop: 0 }}>Actions</h3>
               {!token && (
-                <p style={{ color: '#cbd5e1' }}>
+                <p style={{ color: '#334155' }}>
                   Login as a student to enroll and track progress.
                 </p>
               )}
@@ -546,11 +546,11 @@ export default function CourseDetail() {
                   {updating ? 'Enrolling...' : 'Enroll in Course'}
                 </button>
               )}
-              <div style={{ marginTop: 12, fontSize: 12, color: '#94a3b8' }}>
+              <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
                 This course has no curriculum yet. Add chapters/lessons/quizzes from the admin panel to enable lesson tracking.
               </div>
               {actionMsg && (
-                <div style={{ marginTop: 12, background: '#0b1220', border: '1px solid #243047', borderRadius: 12, padding: 10, color: '#e5e7eb' }}>
+                <div style={{ marginTop: 12, background: '#f8fafc', border: '1px solid rgba(15,23,42,0.08)', borderRadius: 12, padding: 10, color: '#0f172a' }}>
                   {actionMsg}
                 </div>
               )}

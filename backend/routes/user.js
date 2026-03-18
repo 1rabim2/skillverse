@@ -1,14 +1,18 @@
 const express = require('express');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Course = require('../models/Course');
 const Certificate = require('../models/Certificate');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth');
 const { notifyAllAdmins, notifyUser } = require('../utils/notifications');
+const { OAuth2Client } = require('google-auth-library');
 
 const router = express.Router();
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 function requireStudent(req, res, next) {
   if (!req.user || req.user.role !== 'student') {
@@ -54,6 +58,24 @@ async function issueCertificateIfNeeded({ user, course, progressEntry }) {
   if ((progressEntry.percent || 0) < 100) return null;
   if (progressEntry.completedAt) return null;
 
+  // Require passing the course final exam (a quiz lesson titled "Final Exam").
+  const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
+  let finalExamLesson = null;
+  for (const ch of chapters) {
+    for (const ls of ch?.lessons || []) {
+      if (ls?.quiz?.questions?.length && /^final exam/i.test(String(ls.title || '').trim())) {
+        finalExamLesson = ls;
+      }
+    }
+  }
+  if (finalExamLesson) {
+    const attempt = (progressEntry.quizAttempts || [])
+      .filter((a) => String(a.lessonId) === String(finalExamLesson._id))
+      .sort((a, b) => new Date(b.attemptedAt) - new Date(a.attemptedAt))[0];
+    const passPercent = Number.isFinite(Number(finalExamLesson.quiz?.passPercent)) ? Number(finalExamLesson.quiz.passPercent) : 60;
+    if (!attempt || !attempt.passed || (attempt.scorePercent || 0) < passPercent) return null;
+  }
+
   progressEntry.completedAt = new Date();
 
   const existing = await Certificate.findOne({ user: user._id, course: course._id });
@@ -67,7 +89,16 @@ async function issueCertificateIfNeeded({ user, course, progressEntry }) {
     certificateId = makeCertificateId();
   }
 
-  const certificate = await Certificate.create({ certificateId, user: user._id, course: course._id });
+  let scorePercent = null;
+  let passPercent = null;
+  if (finalExamLesson) {
+    const attempt = (progressEntry.quizAttempts || [])
+      .filter((a) => String(a.lessonId) === String(finalExamLesson._id))
+      .sort((a, b) => new Date(b.attemptedAt) - new Date(a.attemptedAt))[0];
+    scorePercent = attempt?.scorePercent ?? null;
+    passPercent = Number.isFinite(Number(finalExamLesson.quiz?.passPercent)) ? Number(finalExamLesson.quiz.passPercent) : null;
+  }
+  const certificate = await Certificate.create({ certificateId, user: user._id, course: course._id, scorePercent, passPercent });
   user.certificates = user.certificates || [];
   user.certificates.push({ certificateId, course: course._id, issuedAt: certificate.issuedAt });
 
@@ -205,6 +236,114 @@ router.get('/me', authMiddleware, requireStudent, async (req, res) => {
     res.json({ user });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load profile' });
+  }
+});
+
+router.put('/me', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+
+    function clamp(value, maxLen) {
+      const str = String(value ?? '').trim();
+      return str.length > maxLen ? str.slice(0, maxLen) : str;
+    }
+
+    const next = req.body || {};
+
+    // Keep email immutable here (use a separate flow if you ever support changing it).
+    if (typeof next.name !== 'undefined') user.name = clamp(next.name, 80);
+    if (typeof next.headline !== 'undefined') user.headline = clamp(next.headline, 120);
+    if (typeof next.phone !== 'undefined') user.phone = clamp(next.phone, 40);
+    if (typeof next.location !== 'undefined') user.location = clamp(next.location, 80);
+    if (typeof next.bio !== 'undefined') user.bio = clamp(next.bio, 600);
+    if (typeof next.website !== 'undefined') user.website = clamp(next.website, 200);
+    if (typeof next.github !== 'undefined') user.github = clamp(next.github, 200);
+    if (typeof next.linkedin !== 'undefined') user.linkedin = clamp(next.linkedin, 200);
+    if (typeof next.avatarUrl !== 'undefined') user.avatarUrl = clamp(next.avatarUrl, 300);
+
+    await user.save();
+
+    const safe = await User.findById(user._id).select('-password -resetPasswordToken -resetPasswordExpires -verificationToken');
+    res.json({ user: safe });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+router.post('/change-password', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!newPassword) return res.status(400).json({ error: 'newPassword required' });
+    if (String(newPassword).length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+
+    // If this is a local (email/password) account, require the current password.
+    // If this account is linked to Google, allow changing password without current password
+    // because the user is already authenticated via a valid JWT.
+    if (!user.googleSub) {
+      if (!currentPassword) return res.status(400).json({ error: 'currentPassword required' });
+      const match = await bcrypt.compare(String(currentPassword), user.password);
+      if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
+    } else if (currentPassword) {
+      const match = await bcrypt.compare(String(currentPassword), user.password);
+      if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(String(newPassword), salt);
+    await user.save();
+    res.json({ message: 'Password updated' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update password' });
+  }
+});
+
+router.post('/link-google', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    if (!googleClient) return res.status(500).json({ error: 'Google auth is not configured (missing GOOGLE_CLIENT_ID)' });
+    const { credential } = req.body || {};
+    if (!credential) return res.status(400).json({ error: 'credential required' });
+
+    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload() || {};
+    const email = String(payload.email || '').trim().toLowerCase();
+    const emailVerified = !!payload.email_verified;
+    const googleSub = String(payload.sub || '').trim();
+
+    if (!email) return res.status(400).json({ error: 'Google account has no email' });
+    if (!emailVerified) return res.status(403).json({ error: 'Google email is not verified' });
+    if (!googleSub) return res.status(400).json({ error: 'Google token missing sub' });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+
+    if (String(user.email).toLowerCase() !== email) {
+      return res.status(400).json({ error: 'Google email must match your account email' });
+    }
+
+    const existingBySub = await User.findOne({ googleSub });
+    if (existingBySub && String(existingBySub._id) !== String(user._id)) {
+      return res.status(409).json({ error: 'Google account is already linked to another user' });
+    }
+
+    if (user.googleSub && user.googleSub !== googleSub) {
+      return res.status(409).json({ error: 'This account is already linked to a different Google account' });
+    }
+
+    user.googleSub = googleSub;
+    if (!user.isVerified) user.isVerified = true;
+    await user.save();
+
+    const safe = await User.findById(user._id).select('-password -resetPasswordToken -resetPasswordExpires -verificationToken');
+    res.json({ user: safe });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to link Google account' });
   }
 });
 

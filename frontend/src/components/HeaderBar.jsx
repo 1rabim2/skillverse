@@ -1,24 +1,29 @@
 import React from 'react'
 import { Bell } from 'lucide-react'
+import { NavLink } from 'react-router-dom'
 import { API_BASE } from '../lib/apiBase'
 
 export default function HeaderBar({ user, onLogout }){
   const initials = (user?.name || 'SV').split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
   const token = localStorage.getItem('token')
   const [open, setOpen] = React.useState(false)
+  const [navOpen, setNavOpen] = React.useState(false)
+  const [userOpen, setUserOpen] = React.useState(false)
   const [items, setItems] = React.useState([])
   const [unread, setUnread] = React.useState(0)
   const dropdownRef = React.useRef(null)
+  const navRef = React.useRef(null)
+  const userRef = React.useRef(null)
 
   React.useEffect(() => {
     function onDocClick(e) {
-      if (!open) return
-      if (!dropdownRef.current) return
-      if (!dropdownRef.current.contains(e.target)) setOpen(false)
+      if (open && dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false)
+      if (navOpen && navRef.current && !navRef.current.contains(e.target)) setNavOpen(false)
+      if (userOpen && userRef.current && !userRef.current.contains(e.target)) setUserOpen(false)
     }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
-  }, [open])
+  }, [open, navOpen, userOpen])
 
   async function loadNotifications(){
     if (!token) return
@@ -76,8 +81,42 @@ export default function HeaderBar({ user, onLogout }){
 
   return (
     <header className="sv-header">
-      <div className="sv-greet">Welcome back, <strong>{user?.name || 'Student'}</strong></div>
-      <div className="sv-header-right" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <div className="sv-header-left">
+        <div className="sv-nav-wrap" ref={navRef}>
+          <button
+            className="sv-icon-btn sv-menu-btn"
+            type="button"
+            title="Menu"
+            onClick={() => setNavOpen((v) => !v)}
+          >
+            <span className="sv-burger" aria-hidden="true" />
+          </button>
+          {navOpen && (
+            <div className="sv-nav-menu">
+              <NavLink to="/dashboard" onClick={() => setNavOpen(false)}>Dashboard</NavLink>
+              <NavLink to="/courses" onClick={() => setNavOpen(false)}>Courses</NavLink>
+              <NavLink to="/portfolio" onClick={() => setNavOpen(false)}>Portfolio</NavLink>
+              <NavLink to="/profile" onClick={() => setNavOpen(false)}>Profile</NavLink>
+              <button className="sv-nav-logout" type="button" onClick={() => { setNavOpen(false); onLogout() }}>Logout</button>
+            </div>
+          )}
+        </div>
+
+        <div className="sv-brand">
+          <a href="/dashboard" className="sv-brand-link">Skill<span>Verse</span></a>
+        </div>
+      </div>
+
+      <div className="sv-header-center">
+        <nav className="sv-topnav" aria-label="Primary">
+          <NavLink to="/dashboard">Dashboard</NavLink>
+          <NavLink to="/courses">Courses</NavLink>
+          <NavLink to="/portfolio">Portfolio</NavLink>
+          <NavLink to="/profile">Profile</NavLink>
+        </nav>
+      </div>
+
+      <div className="sv-header-right" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <input className="sv-search" placeholder="Search courses..." />
         <div className="sv-notif" ref={dropdownRef}>
           <button
@@ -126,8 +165,32 @@ export default function HeaderBar({ user, onLogout }){
             </div>
           )}
         </div>
-        <button className="sv-cta" onClick={onLogout}>Logout</button>
-        <div className="sv-avatar">{initials}</div>
+        <div className="sv-user" ref={userRef}>
+          <button
+            type="button"
+            className="sv-avatar-btn"
+            title="Account"
+            onClick={() => setUserOpen((v) => !v)}
+          >
+            <span className="sv-avatar">{initials}</span>
+          </button>
+          {userOpen && (
+            <div className="sv-user-menu">
+              <div className="sv-user-head">
+                <div className="sv-user-name">{user?.name || 'Student'}</div>
+                <div className="sv-user-email">{user?.email || ''}</div>
+              </div>
+              <NavLink to="/profile" onClick={() => setUserOpen(false)}>Profile</NavLink>
+              <button
+                type="button"
+                className="sv-user-logout"
+                onClick={() => { setUserOpen(false); onLogout() }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )

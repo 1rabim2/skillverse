@@ -22,6 +22,11 @@ export default function Sidebar({ onLogout }){
               Portfolio
             </NavLink>
           </li>
+          <li>
+            <NavLink to="/profile" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Profile
+            </NavLink>
+          </li>
           <li className="logout" onClick={onLogout}>Logout</li>
         </ul>
       </nav>

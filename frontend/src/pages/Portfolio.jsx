@@ -84,8 +84,7 @@ export default function Portfolio() {
   const certificates = data?.certificates || [];
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <div className="mx-auto w-full max-w-6xl space-y-4">
+    <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight">My Portfolio</h1>
@@ -178,8 +177,6 @@ export default function Portfolio() {
             </Card>
           </div>
         </div>
-      </div>
     </div>
   );
 }
-

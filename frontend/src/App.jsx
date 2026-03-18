@@ -8,8 +8,10 @@ import Dashboard from './pages/Dashboard';
 import Landing from './pages/Landing';
 import Courses from './pages/Courses';
 import Portfolio from './pages/Portfolio';
+import Profile from './pages/Profile';
 import CourseDetail from './pages/CourseDetail';
 import Certificates from './pages/Certificates';
+import StudentLayout from './components/StudentLayout';
 import ProtectedAdminRoute from './components/admin/ProtectedAdminRoute';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminLogin from './pages/admin/AdminLogin';
@@ -31,11 +33,15 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify" element={<Verify />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/courses" element={<Courses />} />
-        <Route path="/courses/:id" element={<CourseDetail />} />
-        <Route path="/portfolio" element={<Portfolio />} />
-        <Route path="/certificates" element={<Certificates />} />
+
+        <Route element={<StudentLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/courses" element={<Courses />} />
+          <Route path="/courses/:id" element={<CourseDetail />} />
+          <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/certificates" element={<Certificates />} />
+        </Route>
 
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
