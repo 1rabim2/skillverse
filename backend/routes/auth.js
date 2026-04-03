@@ -7,6 +7,7 @@ const User = require('../models/User');
 const { notifyAllAdmins } = require('../utils/notifications');
 const { OAuth2Client } = require('google-auth-library');
 const rateLimit = require('express-rate-limit');
+const { validatePassword, validateEmail } = require('../utils/validation');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
@@ -19,6 +20,15 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// Rate limit for password reset - more restrictive
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many password reset attempts. Please try again later.'
+});
+
 function escapeRegExp(string) {
   return String(string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -29,12 +39,45 @@ function emailFilter(email) {
   return { email: { $regex: `^${escapeRegExp(normalized)}$`, $options: 'i' } };
 }
 
+// Helper to set JWT in httpOnly cookie
+function setAuthCookie(res, token) {
+  res.cookie('authToken', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+}
+
+// Helper to clear auth cookie
+function clearAuthCookie(res) {
+  res.clearCookie('authToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+}
+
 // Register
 router.post('/register', authLimiter, async (req, res) => {
   try {
     const { name, email, password } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
+    
+    if (!normalizedEmail || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    // Validate email format
+    if (!validateEmail(normalizedEmail)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: 'Password does not meet requirements', details: passwordValidation.errors });
+    }
 
     const existing = await User.findOne(emailFilter(normalizedEmail));
     if (existing) return res.status(409).json({ error: 'User already exists' });
@@ -42,8 +85,15 @@ router.post('/register', authLimiter, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hash = await bcrypt.hash(password, salt);
 
-    // Auto-verify new users (no email verification required)
-    const user = new User({ name, email: normalizedEmail, password: hash, isVerified: true });
+    // Don't auto-verify - require email verification
+    const verificationToken = crypto.randomBytes(20).toString('hex');
+    const user = new User({ 
+      name, 
+      email: normalizedEmail, 
+      password: hash, 
+      isVerified: false,
+      verificationToken
+    });
     await user.save();
 
     notifyAllAdmins({
@@ -54,9 +104,21 @@ router.post('/register', authLimiter, async (req, res) => {
       meta: { userId: String(user._id) }
     }).catch(() => null);
 
-    // Issue a token and log the user in immediately
-    const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ token, user: { id: user._id, email: user.email, name: user.name, role: user.role || 'student' } });
+    // Send verification email
+    const { sendEmail } = require('../utils/email');
+    const verifyLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${verificationToken}`;
+    await sendEmail({
+      to: user.email,
+      subject: 'Verify your Skillverse account',
+      text: `Please verify your account by visiting: ${verifyLink}`,
+      html: `<p>Please verify your account by clicking <a href="${verifyLink}">this link</a>.</p>`
+    }).catch(() => null);
+
+    // Don't log user in automatically - require email verification first
+    res.status(201).json({ 
+      message: 'Account created. Please check your email to verify your account.',
+      user: { id: user._id, email: user.email, name: user.name }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -87,6 +149,10 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
 
     const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
+    
+    // Set token in httpOnly cookie and also return for client logic
+    setAuthCookie(res, token);
+    
     res.json({ token, user: { id: user._id, email: user.email, name: user.name, role: user.role || 'student' } });
   } catch (err) {
     console.error(err);
@@ -124,24 +190,27 @@ router.post('/google', authLimiter, async (req, res) => {
     }
 
     let user = await User.findOne(emailFilter(email));
+    let isNewUser = false;
 
     if (!user) {
-      // Create a local account tied to Google. We still store a random password hash so that:
-      // - the existing schema (password required) remains valid
-      // - the user can later "reset password" to set an email/password login if desired
+      // Create a new account tied to Google
+      // User must verify their email, even with Google OAuth
       const randomPassword = crypto.randomBytes(32).toString('hex');
       const salt = await bcrypt.genSalt(10);
       const hash = await bcrypt.hash(randomPassword, salt);
+      const verificationToken = crypto.randomBytes(20).toString('hex');
 
       user = new User({
         name,
         email,
         password: hash,
-        isVerified: true,
-        googleSub
+        isVerified: false, // SECURITY FIX: Require email verification even with Google
+        googleSub,
+        verificationToken
       });
 
       await user.save();
+      isNewUser = true;
 
       notifyAllAdmins({
         type: 'info',
@@ -150,6 +219,21 @@ router.post('/google', authLimiter, async (req, res) => {
         link: '/admin/users',
         meta: { userId: String(user._id), provider: 'google' }
       }).catch(() => null);
+
+      // Send verification email for Google OAuth users
+      const { sendEmail } = require('../utils/email');
+      const verifyLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${verificationToken}`;
+      await sendEmail({
+        to: user.email,
+        subject: 'Verify your Skillverse account',
+        text: `Please verify your account by visiting: ${verifyLink}`,
+        html: `<p>Please verify your account by clicking <a href="${verifyLink}">this link</a>.</p>`
+      }).catch(() => null);
+
+      return res.status(201).json({
+        message: 'Account created. Please check your email to verify your account.',
+        user: { id: user._id, email: user.email, name: user.name }
+      });
     } else {
       if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
       // If they previously signed up via email but are now using Google, remember the googleSub.
@@ -157,12 +241,20 @@ router.post('/google', authLimiter, async (req, res) => {
         return res.status(409).json({ error: 'This email is already linked to a different Google account' });
       }
       if (!user.googleSub) user.googleSub = googleSub;
-      if (!user.isVerified) user.isVerified = true;
       if (!user.name && name) user.name = name;
       await user.save();
     }
 
+    // User exists and is verified
+    if (!user.isVerified) {
+      return res.status(403).json({ error: 'Please verify your email before logging in' });
+    }
+
     const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
+    
+    // Set token in httpOnly cookie and return token for frontend storage
+    setAuthCookie(res, token);
+    
     res.json({ token, user: { id: user._id, email: user.email, name: user.name, role: user.role || 'student' } });
   } catch (err) {
     console.error(err);
@@ -177,13 +269,13 @@ router.get('/verify', async (req, res) => {
     if (!token) return res.status(400).json({ error: 'Token required' });
 
     const user = await User.findOne({ verificationToken: token });
-    if (!user) return res.status(400).json({ error: 'Invalid token' });
+    if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
 
     user.isVerified = true;
     user.verificationToken = undefined;
     await user.save();
 
-    res.json({ message: 'Email verified' });
+    res.json({ message: 'Email verified. You can now log in.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -194,9 +286,10 @@ router.get('/verify', async (req, res) => {
 router.post('/resend-verification', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail) return res.status(400).json({ error: 'Email required' });
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne(emailFilter(normalizedEmail));
     // Always return a generic message to avoid revealing which emails exist
     if (!user || user.isVerified) return res.status(200).json({ message: 'If that email exists and is unverified, a verification link was sent' });
 
@@ -204,7 +297,7 @@ router.post('/resend-verification', authLimiter, async (req, res) => {
     await user.save();
 
     const { sendEmail } = require('../utils/email');
-    const verifyLink = `${process.env.BASE_URL || 'http://localhost:4000'}/api/auth/verify?token=${user.verificationToken}`;
+    const verifyLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${user.verificationToken}`;
     await sendEmail({
       to: user.email,
       subject: 'Verify your Skillverse account',
@@ -219,13 +312,14 @@ router.post('/resend-verification', authLimiter, async (req, res) => {
   }
 });
 
-// Forgot password
-router.post('/forgot-password', authLimiter, async (req, res) => {
+// Forgot password - WITH RATE LIMITING
+router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail) return res.status(400).json({ error: 'Email required' });
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne(emailFilter(normalizedEmail));
     // Generic response to avoid revealing whether the email exists
     if (!user) return res.status(200).json({ message: 'If that email exists, an appropriate link was sent' });
 
@@ -235,7 +329,7 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
     if (!user.isVerified) {
       if (!user.verificationToken) user.verificationToken = require('crypto').randomBytes(20).toString('hex');
       await user.save();
-      const verifyLink = `${process.env.BASE_URL || 'http://localhost:4000'}/api/auth/verify?token=${user.verificationToken}`;
+      const verifyLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${user.verificationToken}`;
       await sendEmail({
         to: user.email,
         subject: 'Verify your Skillverse account',
@@ -277,6 +371,12 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ error: 'Token and new password required' });
 
+    // Validate new password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: 'Password does not meet requirements', details: passwordValidation.errors });
+    }
+
     const user = await User.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: Date.now() } });
     if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
 
@@ -292,5 +392,14 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+// Logout
+router.post('/logout', (req, res) => {
+  clearAuthCookie(res);
+  res.json({ message: 'Logged out successfully' });
+});
+
+
+
 
 module.exports = router;

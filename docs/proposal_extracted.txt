@@ -1,5 +1,5 @@
 ﻿Final Year Project Proposal
-Skill Verse â€“ A Career-Focused E-Learning Platform
+Skill Verse - A Career-Focused E-Learning Platform
 Submitted by: Rabim Kc
 Uni ID: 2414192
 Supervisor: Saroj D Shrestha
@@ -195,7 +195,7 @@ Flexibility: Since requirements may evolve during the project (e.g., adjusting f
 Continuous Feedback: Each sprint delivers a working module that can be tested and reviewed, ensuring that the system is aligned with user expectations and project goals.
 Risk Management: By breaking the project into smaller increments, risks are identified early, and necessary changes can be made before full deployment.
 Timeline Alignment and Iteration Expectations
-The project will be divided into four sprints each lasting approximately 2â€“3 weeks. Each sprint will focus on delivering a working set of features:
+The project will be divided into four sprints each lasting approximately 2-3 weeks. Each sprint will focus on delivering a working set of features:
 Sprint 1: User Management + Course Browsing (Authentication, Profiles, Course Listings)
 Sprint 2: Learning Subsystem (Video Lessons, Notes) + Assessments (Quizzes)
 Sprint 3: Progress Tracking + Certificates + Dynamic Portfolio
@@ -243,7 +243,7 @@ Justification: Tailwind enables utility-first, responsive, and modern design wit
 Node.js with Express.js (Backend).
 Justification: Node.js is lightweight and event-driven, ideal for handling multiple requests simultaneously. Express.js simplifies backend development by providing APIs, middleware, and routing features needed for Skill Verse.
 Chart.js (Analytics Visualization).
-Justification: Used to display learnersâ€™ progress and performance in graphical formats, making progress tracking more intuitive.
+Justification: Used to display learners' progress and performance in graphical formats, making progress tracking more intuitive.
 Database.
 MongoDB (NoSQL Database).
 Justification: MongoDB provides flexible schema design, scalability, and efficient handling of unstructured data like course content, user activity, and progress tracking. Its JSON-like documents integrate seamlessly with JavaScript.

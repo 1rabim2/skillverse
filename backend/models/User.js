@@ -20,6 +20,11 @@ const UserSchema = new mongoose.Schema({
     course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
     percent: { type: Number, default: 0 },
     completedAt: { type: Date },
+    notes: [{
+      lessonId: { type: String, default: '' },
+      text: { type: String, default: '' },
+      updatedAt: { type: Date, default: Date.now }
+    }],
     completedLessons: [{
       lessonId: { type: String },
       completedAt: { type: Date, default: Date.now }
@@ -39,10 +44,29 @@ const UserSchema = new mongoose.Schema({
     course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
     issuedAt: { type: Date, default: Date.now }
   }],
+  // Gamification: XP and badges
+  xp: { type: Number, default: 0, index: true }, // Total experience points
+  badges: [{
+    name: { type: String }, // e.g., "First Course", "Speedrunner", "Quiz Master"
+    description: { type: String },
+    earnedAt: { type: Date, default: Date.now },
+    icon: { type: String } // URL or emoji
+  }],
+  currentStreak: { type: Number, default: 0 }, // Consecutive days learning
+  lastActivityDate: { type: Date }, // Track learning streak
   isVerified: { type: Boolean, default: false },
   verificationToken: { type: String },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
+  subscription: {
+    provider: { type: String, enum: ['khalti', ''], default: '' },
+    status: { type: String, enum: ['none', 'active', 'past_due', 'canceled'], default: 'none' },
+    currentPeriodStart: { type: Date, default: null },
+    currentPeriodEnd: { type: Date, default: null },
+    lastPaymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment', default: null },
+    lastReminderAt: { type: Date, default: null },
+    lastExpiredNoticeAt: { type: Date, default: null }
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', UserSchema);

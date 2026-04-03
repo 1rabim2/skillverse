@@ -8,6 +8,9 @@ export default function AdminSettings() {
     supportedLanguages: ['en', 'ne'],
     labels: { en: { welcome: 'Welcome' }, ne: { welcome: 'Swagat cha' } }
   });
+  const [emailStatus, setEmailStatus] = React.useState({ configured: false, from: '' });
+  const [emailTo, setEmailTo] = React.useState('');
+  const [emailMsg, setEmailMsg] = React.useState('');
   const [saved, setSaved] = React.useState('');
   const [seeding, setSeeding] = React.useState(false);
   const [seedMsg, setSeedMsg] = React.useState('');
@@ -17,10 +20,11 @@ export default function AdminSettings() {
   const [pwMsg, setPwMsg] = React.useState('');
 
   React.useEffect(() => {
-    Promise.all([adminApi.get('/settings/gamification'), adminApi.get('/settings/localization')])
-      .then(([g, l]) => {
+    Promise.all([adminApi.get('/settings/gamification'), adminApi.get('/settings/localization'), adminApi.get('/settings/email')])
+      .then(([g, l, e]) => {
         setGamification(g.data);
         setLocalization(l.data);
+        setEmailStatus(e.data || { configured: false, from: '' });
       })
       .catch(() => null);
   }, []);
@@ -92,12 +96,25 @@ export default function AdminSettings() {
     }
   }
 
+  async function sendTestEmail(e) {
+    e.preventDefault();
+    setEmailMsg('');
+    try {
+      await adminApi.post('/settings/email/test', { to: emailTo.trim() || undefined });
+      setEmailMsg('Test email sent (check inbox/spam).');
+      setTimeout(() => setEmailMsg(''), 3500);
+    } catch (err) {
+      setEmailMsg(err.response?.data?.error || 'Failed to send test email');
+    }
+  }
+
   return (
     <div className="space-y-6">
       {saved && <div className="rounded bg-emerald-100 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{saved}</div>}
       {seedMsg && <div className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{seedMsg}</div>}
       {adminMsg && <div className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{adminMsg}</div>}
       {pwMsg && <div className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{pwMsg}</div>}
+      {emailMsg && <div className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">{emailMsg}</div>}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <h3 className="mb-3 text-lg font-semibold">Gamification Settings</h3>
@@ -128,6 +145,34 @@ export default function AdminSettings() {
             <input className="w-full rounded border border-slate-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-800" value={localization.labels?.ne?.welcome || ''} onChange={(e) => setLocalization((v) => ({ ...v, labels: { ...v.labels, ne: { ...(v.labels?.ne || {}), welcome: e.target.value } } }))} />
           </div>
           <button className="rounded bg-slate-900 px-4 py-2 text-white dark:bg-slate-100 dark:text-slate-900">Save Localization</button>
+        </form>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <h3 className="mb-2 text-lg font-semibold">Email (SMTP)</h3>
+        <div className="text-sm text-slate-600 dark:text-slate-300">
+          Status:{' '}
+          <span className={`font-extrabold ${emailStatus.configured ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+            {emailStatus.configured ? 'CONFIGURED' : 'NOT CONFIGURED'}
+          </span>
+        </div>
+        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          From: <span className="font-mono">{emailStatus.from || '-'}</span>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          To enable real emails (verification, password reset, payments), set <span className="font-mono">SMTP_HOST</span>, <span className="font-mono">SMTP_PORT</span>, <span className="font-mono">SMTP_USER</span>, <span className="font-mono">SMTP_PASS</span> in <span className="font-mono">backend/.env</span> and restart the backend.
+        </p>
+        <form onSubmit={sendTestEmail} className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            className="w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            value={emailTo}
+            onChange={(e) => setEmailTo(e.target.value)}
+            placeholder="Send test email to (optional)"
+            type="email"
+          />
+          <button className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
+            Send Test Email
+          </button>
         </form>
       </section>
 

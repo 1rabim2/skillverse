@@ -1,35 +1,52 @@
-import React from 'react'
-import { API_BASE } from '../lib/apiBase'
+import React from 'react';
+import { adminFetch, apiFetch } from '../lib/apiFetch';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import Input from '../components/ui/Input';
 
-function AccessMessage(){
+function Field({ label, children, hint }) {
   return (
-    <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', padding: 24 }}>
-      <div style={{ maxWidth: 560, background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 8px 24px rgba(15,23,42,0.08)' }}>
-        <h2 style={{ marginTop: 0 }}>Profile Access</h2>
-        <p>You are not logged in as a student. Please login first.</p>
-        <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-          <button className="sv-cta" onClick={() => { window.location.href = '/login' }}>
-            Go to Student Login
-          </button>
-          <button
-            style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
-            onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('adminToken'); window.location.href = '/login' }}
-          >
-            Reset Session
-          </button>
-        </div>
-      </div>
+    <div className="space-y-2">
+      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{label}</div>
+      {children}
+      {hint ? <div className="text-xs text-slate-500 dark:text-slate-400">{hint}</div> : null}
     </div>
-  )
+  );
 }
 
-export default function Profile(){
-  const token = localStorage.getItem('token')
-  const [user, setUser] = React.useState(null)
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState('')
-  const [saveMsg, setSaveMsg] = React.useState('')
-  const [saving, setSaving] = React.useState(false)
+function AccessMessage({ onReset }) {
+  return (
+    <div className="grid min-h-[70vh] place-items-center p-4">
+      <Card className="w-full max-w-xl p-6">
+        <div className="text-lg font-extrabold tracking-tight">Profile</div>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+          You are not logged in as a student. Sign in to view and edit your profile.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="primary" onClick={() => (window.location.href = '/login')}>
+            Go to student login
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              onReset();
+            }}
+          >
+            Reset session
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export default function Profile() {
+  const [user, setUser] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
+  const [blocked, setBlocked] = React.useState(false);
+  const [saveMsg, setSaveMsg] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState({
     name: '',
     headline: '',
@@ -40,33 +57,34 @@ export default function Profile(){
     github: '',
     linkedin: '',
     avatarUrl: ''
-  })
+  });
 
-  const [pwForm, setPwForm] = React.useState({ currentPassword: '', newPassword: '' })
-  const [pwMsg, setPwMsg] = React.useState('')
+  const [pwForm, setPwForm] = React.useState({ currentPassword: '', newPassword: '' });
+  const [pwMsg, setPwMsg] = React.useState('');
 
-  const googleBtnRef = React.useRef(null)
-  const [googleMsg, setGoogleMsg] = React.useState('')
-  const googleClientId = React.useMemo(() => import.meta.env.VITE_GOOGLE_CLIENT_ID || '', [])
+  const googleBtnRef = React.useRef(null);
+  const [googleMsg, setGoogleMsg] = React.useState('');
+  const googleClientId = React.useMemo(() => import.meta.env.VITE_GOOGLE_CLIENT_ID || '', []);
 
   React.useEffect(() => {
-    if (!token) return
-    let mounted = true
+    let mounted = true;
 
-    async function load(){
-      try{
-        setLoading(true)
-        setError('')
-        const res = await fetch(`${API_BASE}/user/me`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        const data = await res.json()
-        if(!res.ok){
-          if (res.status === 401 || res.status === 403) localStorage.removeItem('token')
-          throw new Error(data?.error || 'Failed to load profile')
+    async function load() {
+      try {
+        setLoading(true);
+        setError('');
+        setBlocked(false);
+        const res = await apiFetch('/user/me');
+        const data = await res.json();
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            if (mounted) setBlocked(true);
+            return;
+          }
+          throw new Error(data?.error || 'Failed to load profile');
         }
-        if(mounted) {
-          setUser(data.user)
+        if (mounted) {
+          setUser(data.user);
           setForm({
             name: data.user?.name || '',
             headline: data.user?.headline || '',
@@ -77,366 +95,344 @@ export default function Profile(){
             github: data.user?.github || '',
             linkedin: data.user?.linkedin || '',
             avatarUrl: data.user?.avatarUrl || ''
-          })
+          });
         }
-      }catch(err){
-        if(mounted) setError(err.message)
-      }finally{
-        if(mounted) setLoading(false)
+      } catch (err) {
+        if (mounted) setError(err.message);
+      } finally {
+        if (mounted) setLoading(false);
       }
     }
 
-    load()
-    return () => { mounted = false }
-  }, [token])
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  async function linkGoogle(credential){
-    try{
-      setGoogleMsg('Linking Google account...')
-      const res = await fetch(`${API_BASE}/user/link-google`, {
+  async function linkGoogle(credential) {
+    try {
+      setGoogleMsg('Linking Google account...');
+      const res = await apiFetch('/user/link-google', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ credential })
-      })
-      const data = await res.json()
-      if(!res.ok) throw new Error(data?.error || 'Failed to link Google')
-      setUser(data.user)
-      setGoogleMsg('Google account linked')
-      setTimeout(() => setGoogleMsg(''), 2000)
-    }catch(err){
-      setGoogleMsg(err.message)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to link Google');
+      setUser(data.user);
+      setGoogleMsg('Google account linked');
+      setTimeout(() => setGoogleMsg(''), 2000);
+    } catch (err) {
+      setGoogleMsg(err.message);
     }
   }
 
   React.useEffect(() => {
-    if (!token) return
-    if (!googleClientId) return
-    if (!user) return
-    if (user.googleSub) return
-    if (!googleBtnRef.current) return
+    if (!googleClientId) return;
+    if (!user) return;
+    if (user.googleSub) return;
+    if (!googleBtnRef.current) return;
 
-    let cancelled = false
-    let tries = 0
-    const maxTries = 50
+    let cancelled = false;
+    let tries = 0;
+    const maxTries = 50;
 
-    function tryInit(){
-      if (cancelled) return
-      tries += 1
-      const google = window.google
+    function tryInit() {
+      if (cancelled) return;
+      tries += 1;
+      const google = window.google;
       if (google && google.accounts && google.accounts.id) {
-        try{
+        try {
           google.accounts.id.initialize({
             client_id: googleClientId,
             callback: (resp) => {
-              const cred = resp && resp.credential ? resp.credential : ''
-              if(!cred) {
-                setGoogleMsg('Google link failed: missing credential')
-                return
+              const cred = resp && resp.credential ? resp.credential : '';
+              if (!cred) {
+                setGoogleMsg('Google link failed: missing credential');
+                return;
               }
-              linkGoogle(cred)
+              linkGoogle(cred);
             }
-          })
-          googleBtnRef.current.innerHTML = ''
+          });
+          googleBtnRef.current.innerHTML = '';
           google.accounts.id.renderButton(googleBtnRef.current, {
             theme: 'outline',
             size: 'large',
             width: 320,
             text: 'continue_with'
-          })
-          return
-        }catch(err){
-          setGoogleMsg(`Google init failed: ${err?.message || String(err)}`)
-          return
+          });
+          return;
+        } catch (err) {
+          setGoogleMsg(err?.message || 'Google button failed to initialize');
+          return;
         }
       }
-      if (tries < maxTries) setTimeout(tryInit, 100)
+
+      if (tries < maxTries) setTimeout(tryInit, 100);
+      else setGoogleMsg('Google sign-in failed to load. Check your network and `VITE_GOOGLE_CLIENT_ID`.');
     }
 
-    tryInit()
-    return () => { cancelled = true }
-  }, [token, googleClientId, user])
+    tryInit();
+    return () => {
+      cancelled = true;
+    };
+  }, [googleClientId, user]);
 
-  async function saveProfile(e){
-    e.preventDefault()
-    setSaveMsg('')
-    setSaving(true)
-    try{
-      const res = await fetch(`${API_BASE}/user/me`, {
+  async function save(e) {
+    e.preventDefault();
+    if (!user) return;
+
+    setSaveMsg('');
+    setSaving(true);
+    try {
+      const res = await apiFetch('/user/me', {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(form)
-      })
-      const data = await res.json()
-      if(!res.ok) throw new Error(data?.error || 'Failed to save profile')
-      setUser(data.user)
-      setSaveMsg('Profile updated')
-      setTimeout(() => setSaveMsg(''), 2000)
-    }catch(err){
-      setSaveMsg(err.message)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to update profile');
+      setUser(data.user);
+      setSaveMsg('Profile updated');
+      setTimeout(() => setSaveMsg(''), 2000);
+    } catch (err) {
+      setSaveMsg(err.message);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
-  async function changePassword(e){
-    e.preventDefault()
-    setPwMsg('')
-    try{
-      const res = await fetch(`${API_BASE}/user/change-password`, {
-        method: 'POST',
+  async function changePassword(e) {
+    e.preventDefault();
+    if (!user) return;
+
+    setPwMsg('');
+    try {
+      const res = await apiFetch('/user/me/password', {
+        method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(pwForm)
-      })
-      const data = await res.json()
-      if(!res.ok) throw new Error(data?.error || 'Failed to update password')
-      setPwMsg('Password updated')
-      setPwForm({ currentPassword: '', newPassword: '' })
-      setTimeout(() => setPwMsg(''), 2000)
-    }catch(err){
-      setPwMsg(err.message)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to update password');
+      setPwForm({ currentPassword: '', newPassword: '' });
+      setPwMsg('Password updated');
+      setTimeout(() => setPwMsg(''), 2000);
+    } catch (err) {
+      setPwMsg(err.message);
     }
   }
 
-  if (!token) return <AccessMessage />
-  if (loading) return <div style={{ padding: 24 }}>Loading profile...</div>
-  if (error) {
-    return (
-      <div style={{ padding: 24 }}>
-        <p>Could not load profile: {error}</p>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button className="sv-cta" onClick={() => window.location.reload()}>Retry</button>
-          <button className="sv-cta" onClick={() => { window.location.href = '/login' }}>Go to Login</button>
-        </div>
-      </div>
-    )
+  async function resetSession() {
+    try {
+      await apiFetch('/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    try {
+      await adminFetch('/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('token'); // legacy cleanup
+    localStorage.removeItem('adminToken'); // legacy cleanup
+    localStorage.removeItem('adminData');
+    window.location.href = '/login';
   }
 
-  const safeUser = user || { name: 'Student', email: '' }
-  const isGoogleLinked = !!safeUser.googleSub
-  const completionFields = [
-    safeUser?.name,
-    safeUser?.headline,
-    safeUser?.phone,
-    safeUser?.location,
-    safeUser?.bio,
-    safeUser?.website,
-    safeUser?.github,
-    safeUser?.linkedin,
-    safeUser?.avatarUrl
-  ]
-  const completionTotal = completionFields.length
-  const completionFilled = completionFields.filter((v) => String(v || '').trim().length > 0).length
-  const completionPct = completionTotal ? Math.round((completionFilled / completionTotal) * 100) : 0
+  if (blocked) return <AccessMessage onReset={resetSession} />;
+
+  if (loading) {
+    return (
+      <Card className="p-5">
+        <div className="text-sm text-slate-600 dark:text-slate-300">Loading profile...</div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="p-5">
+        <div className="text-sm font-semibold text-slate-900 dark:text-white">Could not load profile</div>
+        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{error}</div>
+        <div className="mt-4 flex gap-2">
+          <Button variant="primary" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+          <Button variant="outline" onClick={() => (window.location.href = '/login')}>
+            Go to login
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  const isGoogleLinked = !!user?.googleSub;
+  const avatarUrl = form.avatarUrl || user?.avatarUrl || '';
 
   return (
-    <>
-      <section className="sv-section">
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 16,
-                overflow: 'hidden',
-                background: 'linear-gradient(135deg, rgba(79,70,229,0.18), rgba(250,204,21,0.10))',
-                border: '1px solid rgba(15,23,42,0.06)',
-                display: 'grid',
-                placeItems: 'center',
-                fontWeight: 900,
-                color: '#0f172a'
-              }}
-              title="Avatar"
-            >
-              {safeUser.avatarUrl ? (
-                // eslint-disable-next-line jsx-a11y/img-redundant-alt
-                <img src={safeUser.avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                (safeUser.name || 'SV')
-                  .split(' ')
-                  .map((p) => p[0])
-                  .join('')
-                  .slice(0, 2)
-                  .toUpperCase()
-              )}
-            </div>
-            <div>
-              <h2 style={{ marginTop: 0, marginBottom: 4 }}>Profile</h2>
-              <div style={{ color: '#475569', fontSize: 13 }}>
-                {safeUser.email} • {isGoogleLinked ? 'Google linked' : 'Google not linked'}
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/30">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-sm font-extrabold text-slate-700 dark:text-slate-200">
+                {(user?.name || 'S').slice(0, 1).toUpperCase()}
               </div>
-            </div>
+            )}
           </div>
-
-          <div style={{ minWidth: 220 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b' }}>
-              <span>Profile completeness</span>
-              <span style={{ fontWeight: 800, color: '#0f172a' }}>{completionPct}%</span>
-            </div>
-            <div className="progress-bar" style={{ marginTop: 8 }}>
-              <div style={{ width: `${completionPct}%` }} />
+          <div>
+            <div className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Profile</div>
+            <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              Keep your details up to date for your portfolio and certificates.
             </div>
           </div>
         </div>
-      </section>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => (window.location.href = '/dashboard')}>
+            Back to dashboard
+          </Button>
+          <Button
+            variant="danger"
+            onClick={async () => {
+              try {
+                await apiFetch('/auth/logout', { method: 'POST' });
+              } catch {
+                // ignore
+              } finally {
+                localStorage.removeItem('token'); // legacy cleanup
+                window.location.href = '/login';
+              }
+            }}
+          >
+            Logout
+          </Button>
+        </div>
+      </div>
 
-      <section className="sv-section">
-        <h2 style={{ marginTop: 0 }}>Details</h2>
-        <form onSubmit={saveProfile} style={{ display: 'grid', gap: 12 }}>
-          <div className="sv-profile-grid" style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, color: '#475569' }}>Full name</label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))}
-                required
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
-              />
-            </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, color: '#475569' }}>Headline</label>
-              <input
+      <Card className="p-5">
+        <div className="text-sm font-extrabold">Personal</div>
+        <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Basic information shown on your profile.</div>
+
+        <form onSubmit={save} className="mt-5 space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Name">
+              <Input value={form.name} onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))} required />
+            </Field>
+            <Field label="Email" hint="Email is read-only.">
+              <Input value={user?.email || ''} readOnly disabled />
+            </Field>
+            <Field label="Headline">
+              <Input
                 value={form.headline}
                 onChange={(e) => setForm((v) => ({ ...v, headline: e.target.value }))}
-                placeholder="e.g., Frontend developer"
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
+                placeholder="e.g. Frontend learner focused on React"
               />
-            </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, color: '#475569' }}>Phone</label>
-              <input
-                value={form.phone}
-                onChange={(e) => setForm((v) => ({ ...v, phone: e.target.value }))}
-                placeholder="+977..."
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
-              />
-            </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, color: '#475569' }}>Location</label>
-              <input
-                value={form.location}
-                onChange={(e) => setForm((v) => ({ ...v, location: e.target.value }))}
-                placeholder="e.g., Kathmandu, Nepal"
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
-              />
-            </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, color: '#475569' }}>Website</label>
-              <input
-                value={form.website}
-                onChange={(e) => setForm((v) => ({ ...v, website: e.target.value }))}
-                placeholder="https://..."
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
-              />
-            </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, color: '#475569' }}>Avatar URL</label>
-              <input
-                value={form.avatarUrl}
-                onChange={(e) => setForm((v) => ({ ...v, avatarUrl: e.target.value }))}
-                placeholder="https://..."
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
-              />
-            </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, color: '#475569' }}>GitHub</label>
-              <input
-                value={form.github}
-                onChange={(e) => setForm((v) => ({ ...v, github: e.target.value }))}
-                placeholder="https://github.com/username"
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
-              />
-            </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, color: '#475569' }}>LinkedIn</label>
-              <input
-                value={form.linkedin}
-                onChange={(e) => setForm((v) => ({ ...v, linkedin: e.target.value }))}
-                placeholder="https://linkedin.com/in/username"
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
-              />
-            </div>
+            </Field>
+            <Field label="Location">
+              <Input value={form.location} onChange={(e) => setForm((v) => ({ ...v, location: e.target.value }))} placeholder="City, Country" />
+            </Field>
+            <Field label="Phone">
+              <Input value={form.phone} onChange={(e) => setForm((v) => ({ ...v, phone: e.target.value }))} placeholder="+1..." />
+            </Field>
+            <Field label="Website">
+              <Input value={form.website} onChange={(e) => setForm((v) => ({ ...v, website: e.target.value }))} placeholder="https://..." />
+            </Field>
+            <Field label="Avatar URL">
+              <Input value={form.avatarUrl} onChange={(e) => setForm((v) => ({ ...v, avatarUrl: e.target.value }))} placeholder="https://..." />
+            </Field>
+            <Field label="GitHub">
+              <Input value={form.github} onChange={(e) => setForm((v) => ({ ...v, github: e.target.value }))} placeholder="https://github.com/username" />
+            </Field>
+            <Field label="LinkedIn">
+              <Input value={form.linkedin} onChange={(e) => setForm((v) => ({ ...v, linkedin: e.target.value }))} placeholder="https://linkedin.com/in/username" />
+            </Field>
           </div>
 
-          <div style={{ display: 'grid', gap: 6 }}>
-            <label style={{ fontSize: 13, color: '#475569' }}>Bio</label>
+          <Field label="Bio">
             <textarea
               value={form.bio}
               onChange={(e) => setForm((v) => ({ ...v, bio: e.target.value }))}
               rows={4}
               placeholder="Tell us a bit about you..."
-              style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)', resize: 'vertical' }}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-900/40"
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="sv-cta" type="submit" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
-              {saving ? 'Saving...' : 'Save changes'}
-            </button>
-            {saveMsg && <div style={{ fontSize: 12, color: saveMsg === 'Profile updated' ? '#16a34a' : '#ef4444', fontWeight: 700 }}>{saveMsg}</div>}
-            <div style={{ fontSize: 12, color: '#64748b' }}>
-              Email is read-only.
-            </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="primary" type="submit" disabled={saving}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+            {saveMsg ? (
+              <div
+                className={[
+                  'text-sm font-semibold',
+                  saveMsg === 'Profile updated' ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'
+                ].join(' ')}
+              >
+                {saveMsg}
+              </div>
+            ) : null}
           </div>
         </form>
-      </section>
+      </Card>
 
-      <section className="sv-section">
-        <h2 style={{ marginTop: 0 }}>Security</h2>
+      <Card className="p-5">
+        <div className="text-sm font-extrabold">Security</div>
+        <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Manage sign-in methods and passwords.</div>
 
         {!isGoogleLinked && googleClientId && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 8 }}>Link Google account (email must match).</div>
-            <div ref={googleBtnRef} />
-            {googleMsg && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8 }}>{googleMsg}</div>}
+          <div className="mt-4">
+            <div className="text-sm text-slate-600 dark:text-slate-300">Link Google account (email must match).</div>
+            <div className="mt-3" ref={googleBtnRef} />
+            {googleMsg ? <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{googleMsg}</div> : null}
           </div>
         )}
 
-        <form onSubmit={changePassword} style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
-          {!isGoogleLinked && (
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 13, opacity: 0.9 }}>Current password</label>
-              <input
+        <form onSubmit={changePassword} className="mt-5 grid max-w-xl gap-4">
+          {!isGoogleLinked ? (
+            <Field label="Current password">
+              <Input
                 type="password"
                 value={pwForm.currentPassword}
                 onChange={(e) => setPwForm((v) => ({ ...v, currentPassword: e.target.value }))}
                 required
-                style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
               />
-            </div>
-          )}
-
-          {isGoogleLinked && (
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
+            </Field>
+          ) : (
+            <div className="text-sm text-slate-600 dark:text-slate-300">
               Your account is linked to Google. You can set an email/password here (current password not required).
             </div>
           )}
 
-          <div style={{ display: 'grid', gap: 6 }}>
-            <label style={{ fontSize: 13, opacity: 0.9 }}>New password</label>
-            <input
+          <Field label="New password" hint="Minimum 8 characters.">
+            <Input
               type="password"
               value={pwForm.newPassword}
               onChange={(e) => setPwForm((v) => ({ ...v, newPassword: e.target.value }))}
               required
               minLength={8}
-              style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(15,23,42,0.12)' }}
             />
-          </div>
+          </Field>
 
-          <button className="sv-cta" type="submit">Update password</button>
-          {pwMsg && <div style={{ fontSize: 12, opacity: 0.9 }}>{pwMsg}</div>}
+          <div className="flex items-center gap-3">
+            <Button variant="primary" type="submit">
+              Update password
+            </Button>
+            {pwMsg ? <div className="text-sm text-slate-600 dark:text-slate-300">{pwMsg}</div> : null}
+          </div>
         </form>
-      </section>
-    </>
-  )
+      </Card>
+    </div>
+  );
 }

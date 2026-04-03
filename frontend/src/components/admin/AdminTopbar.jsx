@@ -17,9 +17,13 @@ export default function AdminTopbar({ admin, onToggleSidebar }) {
   }
 
   function logout() {
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminData');
-    window.location.href = '/admin/login';
+    adminApi
+      .post('/auth/logout')
+      .catch(() => null)
+      .finally(() => {
+        localStorage.removeItem('adminData');
+        window.location.href = '/admin/login';
+      });
   }
 
   React.useEffect(() => {

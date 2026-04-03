@@ -1,12 +1,14 @@
 const mongoose = require('mongoose');
 
 const CommentSchema = new mongoose.Schema({
+  authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   authorName: { type: String, required: true },
   content: { type: String, required: true },
   reported: { type: Boolean, default: false }
 }, { timestamps: true });
 
 const CommunityPostSchema = new mongoose.Schema({
+  authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
   authorName: { type: String, required: true },
   content: { type: String, required: true },
   reported: { type: Boolean, default: false },

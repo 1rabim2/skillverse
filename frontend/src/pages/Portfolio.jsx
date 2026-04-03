@@ -1,45 +1,42 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { API_BASE } from '../lib/apiBase';
+import { apiFetch } from '../lib/apiFetch';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
 
-function Card({ title, children, right }) {
+function SectionCard({ title, children, right }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <Card as="section" className="p-5">
       <div className="mb-3 flex items-start justify-between gap-2">
         <h2 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{title}</h2>
         {right || null}
       </div>
       {children}
-    </section>
+    </Card>
   );
 }
 
 export default function Portfolio() {
-  const token = localStorage.getItem('token');
-
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const [blocked, setBlocked] = React.useState(false);
 
   React.useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     let mounted = true;
     async function load() {
       try {
         setLoading(true);
         setError('');
-        const res = await fetch(`${API_BASE}/user/me/portfolio`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        setBlocked(false);
+        const res = await apiFetch('/user/me/portfolio');
         const result = await res.json();
         if (!res.ok) {
           const msg = result?.error || 'Failed to load portfolio';
-          if (res.status === 404 && msg.toLowerCase().includes('user not found')) localStorage.removeItem('token');
-          if (res.status === 401 || res.status === 403) localStorage.removeItem('token');
+          if (res.status === 401 || res.status === 403) {
+            if (mounted) setBlocked(true);
+            return;
+          }
           throw new Error(msg);
         }
         if (mounted) setData(result);
@@ -54,29 +51,41 @@ export default function Portfolio() {
     return () => {
       mounted = false;
     };
-  }, [token]);
+  }, []);
 
-  if (!token) {
+  if (blocked) {
     return (
       <div className="min-h-[70vh] grid place-items-center p-6">
-        <div className="max-w-xl rounded-2xl bg-white p-6 shadow-sm">
-          <h1 className="text-xl font-extrabold">Portfolio</h1>
-          <p className="mt-2 text-slate-600">Login as a student to view your portfolio.</p>
+        <Card className="w-full max-w-xl p-6">
+          <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Portfolio</h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Login as a student to view your portfolio.</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link to="/login" className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">
+            <Button as={Link} to="/login">
               Go to Login
-            </Link>
-            <Link to="/" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+            </Button>
+            <Button as={Link} to="/" variant="outline">
               Back home
-            </Link>
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
     );
   }
 
-  if (loading) return <div className="p-6">Loading portfolio...</div>;
-  if (error) return <div className="p-6">Could not load portfolio: {error}</div>;
+  if (loading) {
+    return (
+      <Card className="p-6">
+        <div className="text-sm text-slate-600 dark:text-slate-300">Loading portfolio...</div>
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card className="p-6">
+        <div className="text-sm text-slate-700 dark:text-slate-200">Could not load portfolio: {error}</div>
+      </Card>
+    );
+  }
 
   const user = data?.user || {};
   const stats = data?.stats || {};
@@ -93,23 +102,17 @@ export default function Portfolio() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Link
-              to="/dashboard"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
+            <Button as={Link} to="/dashboard" variant="outline">
               Back to Dashboard
-            </Link>
-            <Link
-              to="/certificates"
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700"
-            >
+            </Button>
+            <Button as={Link} to="/certificates">
               Certificates
-            </Link>
+            </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Card title="Profile">
+          <SectionCard title="Profile">
             <div className="text-sm text-slate-700 dark:text-slate-200">
               <div className="font-semibold">{user.name || 'Student'}</div>
               <div className="text-slate-500">{user.email || ''}</div>
@@ -126,10 +129,10 @@ export default function Portfolio() {
                 </div>
               ))}
             </div>
-          </Card>
+          </SectionCard>
 
           <div className="lg:col-span-2 grid grid-cols-1 gap-4">
-            <Card
+            <SectionCard
               title="Completed Courses"
               right={
                 <Link to="/courses" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">
@@ -155,9 +158,9 @@ export default function Portfolio() {
                   </div>
                 )}
               </div>
-            </Card>
+            </SectionCard>
 
-            <Card title="Certificates">
+            <SectionCard title="Certificates">
               <div className="space-y-2">
                 {certificates.map((c) => (
                   <div key={c.certificateId || c.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900">
@@ -174,7 +177,7 @@ export default function Portfolio() {
                   </div>
                 )}
               </div>
-            </Card>
+            </SectionCard>
           </div>
         </div>
     </div>

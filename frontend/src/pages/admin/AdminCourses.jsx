@@ -1,6 +1,8 @@
 import React from 'react';
 import { Eye, GripVertical, Plus, Trash2 } from 'lucide-react';
 import adminApi from '../../lib/adminApi';
+import { uploadAdminImage, uploadAdminVideo } from '../../lib/uploads';
+import { resolveAssetUrl } from '../../lib/assets';
 
 function uid(prefix = 'id') {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
@@ -180,7 +182,7 @@ function PreviewModal({ open, onClose, form, lessons, skillPathTitle }) {
               <p className="text-xs font-semibold text-slate-500">Thumbnail</p>
               <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                 {form.thumbnailUrl ? (
-                  <img src={form.thumbnailUrl} alt="Thumbnail preview" className="h-36 w-full object-cover" />
+                  <img src={resolveAssetUrl(form.thumbnailUrl)} alt="Thumbnail preview" className="h-36 w-full object-cover" />
                 ) : (
                   <div className="flex h-36 items-center justify-center text-sm text-slate-500">No thumbnail</div>
                 )}
@@ -237,6 +239,20 @@ export default function AdminCourses() {
   const [dragLessonId, setDragLessonId] = React.useState('');
 
   const [previewOpen, setPreviewOpen] = React.useState(false);
+  const [deleteModal, setDeleteModal] = React.useState({ open: false, id: '', title: '' });
+  const [rowBusyId, setRowBusyId] = React.useState('');
+  const [menuOpenId, setMenuOpenId] = React.useState('');
+
+  React.useEffect(() => {
+    function onDocClick(e) {
+      if (!menuOpenId) return;
+      const el = e.target;
+      if (el && typeof el.closest === 'function' && el.closest('[data-course-menu]')) return;
+      setMenuOpenId('');
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [menuOpenId]);
 
   async function load() {
     const res = await adminApi.get('/courses', {
@@ -284,9 +300,42 @@ export default function AdminCourses() {
   }
 
   async function remove(id) {
-    if (!window.confirm('Delete this course?')) return;
-    await adminApi.delete(`/courses/${id}`);
-    await load();
+    const item = items.find((x) => x && x._id === id);
+    setDeleteModal({ open: true, id, title: item?.title || 'this course' });
+  }
+
+  async function confirmDelete() {
+    const id = deleteModal.id;
+    if (!id) return setDeleteModal({ open: false, id: '', title: '' });
+    try {
+      setRowBusyId(id);
+      await adminApi.delete(`/courses/${id}`);
+      setDeleteModal({ open: false, id: '', title: '' });
+      setMenuOpenId('');
+      await load();
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to delete course';
+      alert(msg);
+    } finally {
+      setRowBusyId('');
+    }
+  }
+
+  async function togglePublish(item) {
+    if (!item?._id) return;
+    const nextStatus = item.status === 'published' ? 'draft' : 'published';
+    try {
+      setRowBusyId(item._id);
+      const res = await adminApi.put(`/courses/${item._id}`, { status: nextStatus });
+      const updated = res.data;
+      setItems((prev) => prev.map((x) => (x?._id === item._id ? { ...x, ...updated } : x)));
+      setMenuOpenId('');
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to update course';
+      alert(msg);
+    } finally {
+      setRowBusyId('');
+    }
   }
 
   function addLesson() {
@@ -372,8 +421,22 @@ export default function AdminCourses() {
 
   async function onThumbnailPick(file) {
     if (!file) return;
-    const base64 = await fileToBase64(file);
-    setForm((prev) => ({ ...prev, thumbnailUrl: base64 }));
+    try {
+      const uploaded = await uploadAdminImage(file);
+      setForm((prev) => ({ ...prev, thumbnailUrl: String(uploaded.url || '') }));
+    } catch (err) {
+      alert(err?.message || 'Failed to upload image');
+    }
+  }
+
+  async function onLessonVideoPick(lessonId, file) {
+    if (!file) return;
+    try {
+      const uploaded = await uploadAdminVideo(file);
+      updateLesson(lessonId, { videoUrl: String(uploaded.url || '') });
+    } catch (err) {
+      alert(err?.message || 'Failed to upload video');
+    }
   }
 
   async function save(e) {
@@ -418,6 +481,36 @@ export default function AdminCourses() {
   return (
     <div className="space-y-6">
       <PreviewModal open={previewOpen} onClose={() => setPreviewOpen(false)} form={form} lessons={lessons} skillPathTitle={skillPathTitle} />
+      {deleteModal.open && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="border-b border-slate-200 p-5 dark:border-slate-800">
+              <div className="text-lg font-extrabold text-slate-900 dark:text-slate-100">Delete course</div>
+              <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                This will permanently delete <span className="font-semibold">{deleteModal.title}</span>.
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 p-5">
+              <button
+                type="button"
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-700"
+                onClick={() => setDeleteModal({ open: false, id: '', title: '' })}
+                disabled={rowBusyId === deleteModal.id}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                onClick={confirmDelete}
+                disabled={rowBusyId === deleteModal.id}
+              >
+                {rowBusyId === deleteModal.id ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <div className="xl:col-span-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -531,7 +624,7 @@ export default function AdminCourses() {
                       <div className="flex items-center gap-3">
                         <div className="h-16 w-24 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                           {form.thumbnailUrl ? (
-                            <img src={form.thumbnailUrl} alt="Thumbnail preview" className="h-full w-full object-cover" />
+                            <img src={resolveAssetUrl(form.thumbnailUrl)} alt="Thumbnail preview" className="h-full w-full object-cover" />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">Preview</div>
                           )}
@@ -655,36 +748,207 @@ export default function AdminCourses() {
                           />
                         </div>
 
-                        <div>
-                          <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Video URL</label>
-                          <input
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
-                            placeholder="https://..."
-                            value={ls.videoUrl}
-                            onChange={(e) => updateLesson(ls.id, { videoUrl: e.target.value })}
-                          />
-                        </div>
+                        {(ls.type || 'video') === 'video' && (
+                          <div className="md:col-span-2">
+                            <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Video URL</label>
+                            <input
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
+                              placeholder="https://..."
+                              value={ls.videoUrl}
+                              onChange={(e) => updateLesson(ls.id, { videoUrl: e.target.value })}
+                            />
+                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                Upload video
+                                <input
+                                  type="file"
+                                  accept="video/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    onLessonVideoPick(ls.id, file || null);
+                                    e.target.value = '';
+                                  }}
+                                />
+                              </label>
+                              {ls.videoUrl ? (
+                                <a
+                                  href={resolveAssetUrl(ls.videoUrl)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs font-semibold text-indigo-700 hover:underline dark:text-indigo-300"
+                                >
+                                  Open
+                                </a>
+                              ) : null}
+                            </div>
+                          </div>
+                        )}
 
-                        <div>
-                          <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Resource link (optional)</label>
-                          <input
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
-                            placeholder="https://..."
-                            value={ls.resourceLink}
-                            onChange={(e) => updateLesson(ls.id, { resourceLink: e.target.value })}
-                          />
-                        </div>
+                        {['reading', 'project'].includes(ls.type || '') && (
+                          <div className="md:col-span-2">
+                            <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              {ls.type === 'project' ? 'Project instructions' : 'Reading content'}
+                            </label>
+                            <textarea
+                              rows={5}
+                              className={[
+                                'w-full rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm',
+                                'placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200',
+                                'dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-900/40'
+                              ].join(' ')}
+                              placeholder={ls.type === 'project' ? 'What should students build? What to submit?' : 'Write the lesson content here…'}
+                              value={ls.content || ''}
+                              onChange={(e) => updateLesson(ls.id, { content: e.target.value })}
+                            />
+                          </div>
+                        )}
 
-                        <div>
-                          <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Duration (min)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
-                            value={Number.isFinite(Number(ls.durationMin)) ? ls.durationMin : 0}
-                            onChange={(e) => updateLesson(ls.id, { durationMin: toNumber(e.target.value, 0) })}
-                          />
-                        </div>
+                        {(ls.type || 'video') !== 'quiz' && (
+                          <>
+                            <div>
+                              <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Resource link (optional)</label>
+                              <input
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
+                                placeholder="https://..."
+                                value={ls.resourceLink}
+                                onChange={(e) => updateLesson(ls.id, { resourceLink: e.target.value })}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Duration (min)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
+                                value={Number.isFinite(Number(ls.durationMin)) ? ls.durationMin : 0}
+                                onChange={(e) => updateLesson(ls.id, { durationMin: toNumber(e.target.value, 0) })}
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        {(ls.type || '') === 'quiz' && (
+                          <div className="md:col-span-2">
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">Quiz Builder</div>
+                                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Add questions and mark the correct option.</div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Pass %</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    className="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-900"
+                                    value={Number.isFinite(Number(ls.quiz?.passPercent)) ? ls.quiz.passPercent : 60}
+                                    onChange={(e) => updateLesson(ls.id, { quiz: { ...(ls.quiz || {}), passPercent: toNumber(e.target.value, 60) } })}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => addQuizQuestion(ls.id)}
+                                    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700"
+                                  >
+                                    + Add question
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 space-y-4">
+                                {(ls.quiz?.questions || []).map((q) => (
+                                  <div key={q.id} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="text-xs font-extrabold uppercase tracking-wide text-slate-500 dark:text-slate-400">Question</div>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeQuizQuestion(ls.id, q.id)}
+                                        className="rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+
+                                    <div className="mt-3 grid gap-2">
+                                      <input
+                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                        placeholder="Question prompt…"
+                                        value={q.prompt || ''}
+                                        onChange={(e) => updateQuizQuestion(ls.id, q.id, { prompt: e.target.value })}
+                                      />
+                                      <input
+                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                        placeholder="Explanation (optional)"
+                                        value={q.explanation || ''}
+                                        onChange={(e) => updateQuizQuestion(ls.id, q.id, { explanation: e.target.value })}
+                                      />
+                                    </div>
+
+                                    <div className="mt-3 space-y-2">
+                                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Options</div>
+                                      {(q.options || []).map((opt, optIdx) => (
+                                        <div key={`${q.id}_${optIdx}`} className="flex items-center gap-2">
+                                          <input
+                                            type="radio"
+                                            name={`correct_${ls.id}_${q.id}`}
+                                            checked={Number(q.correctIndex) === optIdx}
+                                            onChange={() => updateQuizQuestion(ls.id, q.id, { correctIndex: optIdx })}
+                                          />
+                                          <input
+                                            className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                            value={opt}
+                                            onChange={(e) => {
+                                              const next = [...(q.options || [])];
+                                              next[optIdx] = e.target.value;
+                                              updateQuizQuestion(ls.id, q.id, { options: next });
+                                            }}
+                                          />
+                                          <button
+                                            type="button"
+                                            className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold dark:border-slate-700"
+                                            onClick={() => {
+                                              const next = (q.options || []).filter((_, i) => i !== optIdx);
+                                              const nextCorrect = Math.min(Number(q.correctIndex) || 0, Math.max(0, next.length - 1));
+                                              updateQuizQuestion(ls.id, q.id, { options: next, correctIndex: nextCorrect });
+                                            }}
+                                            disabled={(q.options || []).length <= 2}
+                                            title={(q.options || []).length <= 2 ? 'Need at least 2 options' : 'Remove option'}
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      ))}
+
+                                      <div className="flex flex-wrap gap-2 pt-1">
+                                        <button
+                                          type="button"
+                                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                                          onClick={() => {
+                                            const next = [...(q.options || []), `Option ${(q.options || []).length + 1}`];
+                                            updateQuizQuestion(ls.id, q.id, { options: next });
+                                          }}
+                                        >
+                                          + Add option
+                                        </button>
+                                        <div className="text-xs text-slate-500 dark:text-slate-400 self-center">
+                                          Select the radio button to mark the correct answer.
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {(ls.quiz?.questions || []).length === 0 ? (
+                                  <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                                    No questions yet. Click <span className="font-semibold">Add question</span> to start building this quiz.
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -780,42 +1044,116 @@ export default function AdminCourses() {
             </form>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[740px] text-left text-sm">
-                <thead>
+          <section className="flex max-h-[72vh] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Posted Courses</h3>
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{items.length} on this page</div>
+            </div>
+            <div className="flex-1 overflow-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur dark:bg-slate-900/95">
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <th className="w-[86px] px-2 py-3">Thumb</th>
                     <th className="px-2 py-3">Title</th>
-                    <th className="px-2 py-3">Category</th>
-                    <th className="px-2 py-3">Level</th>
-                    <th className="px-2 py-3">Skill Path</th>
-                    <th className="px-2 py-3">Status</th>
-                    <th className="px-2 py-3">Created</th>
-                    <th className="px-2 py-3">Actions</th>
+                    <th className="hidden w-[130px] px-2 py-3 lg:table-cell">Category</th>
+                    <th className="hidden w-[110px] px-2 py-3 lg:table-cell">Level</th>
+                    <th className="hidden w-[170px] px-2 py-3 xl:table-cell">Skill Path</th>
+                    <th className="w-[110px] px-2 py-3">Status</th>
+                    <th className="hidden w-[110px] px-2 py-3 sm:table-cell">Created</th>
+                    <th className="w-[110px] px-2 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => (
                     <tr key={item._id} className="border-b border-slate-100 dark:border-slate-800/70">
-                      <td className="px-2 py-3 font-semibold text-slate-900 dark:text-slate-100">{item.title}</td>
-                      <td className="px-2 py-3 text-slate-600 dark:text-slate-300">{item.category || '-'}</td>
-                      <td className="px-2 py-3 text-slate-600 dark:text-slate-300">{item.level || '-'}</td>
-                      <td className="px-2 py-3 text-slate-600 dark:text-slate-300">{item.skillPath?.title || '-'}</td>
+                      <td className="px-2 py-3">
+                        <div className="h-10 w-16 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/30">
+                          {item.thumbnailUrl ? (
+                            <img src={resolveAssetUrl(item.thumbnailUrl)} alt="" className="h-full w-full object-cover" />
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-2 py-3 font-semibold text-slate-900 dark:text-slate-100">
+                        <div className="truncate" title={item.title}>
+                          {item.title}
+                        </div>
+                      </td>
+                      <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 lg:table-cell">
+                        <div className="truncate" title={item.category || ''}>
+                          {item.category || '-'}
+                        </div>
+                      </td>
+                      <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 lg:table-cell">
+                        <div className="truncate" title={item.level || ''}>
+                          {item.level || '-'}
+                        </div>
+                      </td>
+                      <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 xl:table-cell">
+                        <div className="truncate" title={item.skillPath?.title || ''}>
+                          {item.skillPath?.title || '-'}
+                        </div>
+                      </td>
                       <td className="px-2 py-3">
                         <StatusBadge status={item.status || 'draft'} />
                       </td>
-                      <td className="px-2 py-3 text-slate-600 dark:text-slate-300">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '-'}</td>
+                      <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 sm:table-cell">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '-'}</td>
                       <td className="px-2 py-3">
-                        <div className="flex gap-2">
-                          <button onClick={() => edit(item)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600">Edit</button>
-                          <button onClick={() => remove(item._id)} className="rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700">Delete</button>
+                        <div className="relative flex items-center justify-end gap-2" data-course-menu>
+                          <button
+                            onClick={() => edit(item)}
+                            className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
+                            disabled={rowBusyId === item._id}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                            disabled={rowBusyId === item._id}
+                            onClick={() => setMenuOpenId((v) => (v === item._id ? '' : item._id))}
+                            title="More"
+                          >
+                            ...
+                          </button>
+
+                          {menuOpenId === item._id && (
+                            <div className="absolute right-0 top-12 z-20 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-900">
+                              <button
+                                type="button"
+                                className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"
+                                onClick={() => {
+                                  setMenuOpenId('');
+                                  window.open(`/courses/${encodeURIComponent(item._id)}`, '_blank', 'noreferrer');
+                                }}
+                              >
+                                View course
+                              </button>
+                              <button
+                                type="button"
+                                className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"
+                                onClick={() => togglePublish(item)}
+                              >
+                                {rowBusyId === item._id ? 'Saving…' : item.status === 'published' ? 'Unpublish' : 'Publish'}
+                              </button>
+                              <button
+                                type="button"
+                                className="w-full px-4 py-3 text-left text-sm font-semibold text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
+                                onClick={() => {
+                                  setMenuOpenId('');
+                                  remove(item._id);
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ))}
                   {items.length === 0 && (
                     <tr>
-                      <td className="px-2 py-6 text-slate-500" colSpan={7}>
+                      <td className="px-2 py-6 text-slate-500" colSpan={8}>
                         No courses found.
                       </td>
                     </tr>
@@ -824,7 +1162,7 @@ export default function AdminCourses() {
               </table>
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-2">
+            <div className="sticky bottom-0 mt-4 flex items-center justify-between gap-2 border-t border-slate-200 bg-white/95 pt-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
               <p className="text-sm text-slate-500">
                 Page {page} / {totalPages}
               </p>

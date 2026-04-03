@@ -22,7 +22,6 @@ export default function AdminLayout() {
         localStorage.setItem('adminData', JSON.stringify(res.data.admin));
       })
       .catch(() => {
-        localStorage.removeItem('adminToken');
         localStorage.removeItem('adminData');
         window.location.href = '/admin/login';
       });

@@ -6,7 +6,9 @@ import {
   Users,
   Workflow,
   BadgeCheck,
+  ClipboardCheck,
   MessagesSquare,
+  CreditCard,
   Settings
 } from 'lucide-react';
 
@@ -16,6 +18,8 @@ const links = [
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/skill-paths', label: 'Skill Paths', icon: Workflow },
   { to: '/admin/certificates', label: 'Certificates', icon: BadgeCheck },
+  { to: '/admin/projects', label: 'Projects', icon: ClipboardCheck },
+  { to: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
   { to: '/admin/community', label: 'Community', icon: MessagesSquare },
   { to: '/admin/settings', label: 'Settings', icon: Settings }
 ];

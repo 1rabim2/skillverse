@@ -1,271 +1,355 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import '../styles/auth.css'
-import { API_BASE } from '../lib/apiBase'
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { apiFetch } from '../lib/apiFetch';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 
-export default function Login(){
-  const location = useLocation()
-  const [mode, setMode] = useState(location.pathname === '/signup' ? 'signup' : 'login') // 'login' or 'signup'
-  const [authMethod, setAuthMethod] = useState('email') // 'email' or 'google'
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [out, setOut] = useState('')
-  const [isError, setIsError] = useState(false)
-  const googleBtnRef = useRef(null)
-  const [googleStatus, setGoogleStatus] = useState('')
+function Segmented({ value, onChange, options }) {
+  return (
+    <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={[
+            'rounded-xl px-3 py-2 text-sm font-semibold transition-colors',
+            value === opt.value
+              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+              : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+          ].join(' ')}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
-  const googleClientId = useMemo(() => {
-    return import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
-  }, [])
+export default function Login() {
+  const location = useLocation();
+  const [mode, setMode] = useState(location.pathname === '/signup' ? 'signup' : 'login'); // login | signup
+  const [authMethod, setAuthMethod] = useState('email'); // email | google
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [out, setOut] = useState('');
+  const [isError, setIsError] = useState(false);
+  const googleBtnRef = useRef(null);
+  const [googleStatus, setGoogleStatus] = useState('');
 
-  function clearForm(){ setName(''); setEmail(''); setPassword(''); setOut(''); setIsError(false) }
+  const googleClientId = useMemo(() => import.meta.env.VITE_GOOGLE_CLIENT_ID || '', []);
+
+  function clearForm() {
+    setName('');
+    setEmail('');
+    setPassword('');
+    setOut('');
+    setIsError(false);
+  }
 
   useEffect(() => {
-    const nextMode = location.pathname === '/signup' ? 'signup' : 'login'
-    setMode(nextMode)
-    clearForm()
+    const nextMode = location.pathname === '/signup' ? 'signup' : 'login';
+    setMode(nextMode);
+    clearForm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname])
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!googleClientId) {
-      setAuthMethod('email')
-      return
+      setAuthMethod('email');
+      return;
     }
-    // Signup defaults to Google; login defaults to email.
-    setAuthMethod(mode === 'signup' ? 'google' : 'email')
-  }, [googleClientId, mode])
+    setAuthMethod(mode === 'signup' ? 'google' : 'email');
+  }, [googleClientId, mode]);
 
-  async function onGoogleCredential(credential){
-    try{
-      setIsError(false)
-      setOut('')
-      setGoogleStatus('Signing in with Google...')
+  async function onGoogleCredential(credential) {
+    try {
+      setIsError(false);
+      setOut('');
+      setGoogleStatus('Signing in with Google…');
 
-      const res = await fetch(`${API_BASE}/auth/google`, {
+
+      const res = await apiFetch('/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential })
-      })
-      const data = await res.json()
+      });
+      const data = await res.json();
 
-      if(res.ok && data.token){
-        localStorage.setItem('token', data.token)
-        window.location.href = '/dashboard'
-        return
+      if (res.ok) {
+        setIsError(false);
+        if (res.status === 201) {
+          // New account created - needs email verification
+          setOut('Account created! Please check your email to verify your account.');
+        } else {
+          // Existing account - logged in
+          window.location.href = '/dashboard';
+        }
+        return;
       }
 
-      setIsError(true)
-      setOut(data.error || JSON.stringify(data))
-    }catch(err){
-      setIsError(true)
-      setOut('Network error: '+err.message)
+      setIsError(true);
+      setOut(data.error || JSON.stringify(data));
+    } catch (err) {
+      setIsError(true);
+      setOut(`Network error: ${err.message}`);
     } finally {
-      setGoogleStatus('')
+      setGoogleStatus('');
     }
   }
 
   useEffect(() => {
-    if(!googleClientId) return
-    if(!googleBtnRef.current) return
+    if (!googleClientId) return;
+    if (!googleBtnRef.current) return;
 
-    let cancelled = false
-    let tries = 0
-    const maxTries = 50 // ~5s
+    let cancelled = false;
+    let tries = 0;
+    const maxTries = 50; // ~5s
 
-    function tryInit(){
-      if(cancelled) return
-      tries += 1
-      const google = window.google
-      if(google && google.accounts && google.accounts.id){
-        try{
+    function tryInit() {
+      if (cancelled) return;
+      tries += 1;
+      const google = window.google;
+      if (google && google.accounts && google.accounts.id) {
+        try {
           google.accounts.id.initialize({
             client_id: googleClientId,
             callback: (resp) => {
-              const cred = resp && resp.credential ? resp.credential : ''
-              if(!cred){
-                setIsError(true)
-                setOut('Google sign-in failed: missing credential')
-                return
+              const cred = resp && resp.credential ? resp.credential : '';
+              if (!cred) {
+                setIsError(true);
+                setOut('Google sign-in failed: missing credential');
+                return;
               }
-              onGoogleCredential(cred)
+              onGoogleCredential(cred);
             }
-          })
+          });
 
-          // Render button
-          googleBtnRef.current.innerHTML = ''
+          googleBtnRef.current.innerHTML = '';
           google.accounts.id.renderButton(googleBtnRef.current, {
             theme: 'outline',
             size: 'large',
             width: 320,
             text: mode === 'signup' ? 'signup_with' : 'signin_with'
-          })
-          return
-        }catch(err){
-          setIsError(true)
-          setOut('Google sign-in init failed: '+(err && err.message ? err.message : String(err)))
-          return
+          });
+          return;
+        } catch (err) {
+          setIsError(true);
+          setOut(`Google sign-in init failed: ${err?.message || String(err)}`);
+          return;
         }
       }
 
-      if(tries < maxTries) setTimeout(tryInit, 100)
+      if (tries < maxTries) setTimeout(tryInit, 100);
       else {
-        setIsError(true)
-        setOut('Google sign-in failed to load. Check your network and `VITE_GOOGLE_CLIENT_ID`.')
+        setIsError(true);
+        setOut('Google sign-in failed to load. Check your network and `VITE_GOOGLE_CLIENT_ID`.');
       }
     }
 
-    tryInit()
-    return () => { cancelled = true }
-  }, [googleClientId, mode, authMethod])
+    tryInit();
+    return () => {
+      cancelled = true;
+    };
+  }, [googleClientId, mode, authMethod]);
 
-  async function submit(e){
-    e.preventDefault()
-    const endpoint = mode === 'login' ? 'login' : 'register'
-    const normalizedEmail = email.trim()
-    const normalizedName = name.trim()
-    const payload = mode === 'login' ? { email: normalizedEmail, password } : { name: normalizedName, email: normalizedEmail, password }
+  async function submit(e) {
+    e.preventDefault();
+    const endpoint = mode === 'login' ? 'login' : 'register';
+    const normalizedEmail = email.trim();
+    const normalizedName = name.trim();
+    const payload =
+      mode === 'login'
+        ? { email: normalizedEmail, password }
+        : { name: normalizedName, email: normalizedEmail, password };
 
-    try{
-      const res = await fetch(`${API_BASE}/auth/${endpoint}`, {
+    try {
+      setIsError(false);
+      setOut('');
+
+      const res = await apiFetch(`/auth/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      })
-      const data = await res.json()
+      });
+      const data = await res.json();
 
-      if(res.ok){
-        setIsError(false)
-        if(data.token){
-          localStorage.setItem('token', data.token)
-          window.location.href = '/dashboard'
-          return
+      if (res.ok) {
+        setIsError(false);
+        if (mode === 'register') {
+          // Registration successful - email verification required
+          setOut('Account created! Check your email to verify your account before logging in.');
+          setName('');
+          setEmail('');
+          setPassword('');
+        } else {
+          // Login successful
+          window.location.href = '/dashboard';
         }
-        const userName = data.user && data.user.name ? ` (${data.user.name})` : ''
-        setOut(mode === 'login' ? `Login successful${userName}` : `Account created - you are logged in${userName}`)
       } else {
-        setIsError(true)
-        setOut(data.error || JSON.stringify(data))
+        setIsError(true);
+        // Handle specific error messages
+        if (data.details && Array.isArray(data.details)) {
+          setOut(data.details.join('\n'));
+        } else {
+          setOut(data.error || JSON.stringify(data));
+        }
       }
-    }catch(err){
-      setIsError(true)
-      setOut('Network error: '+err.message)
+    } catch (err) {
+      setIsError(true);
+      setOut(`Network error: ${err.message}`);
     }
   }
 
+  const title = mode === 'login' ? 'Welcome back' : 'Create your account';
+  const subtitle =
+    mode === 'login'
+      ? 'Sign in to continue your learning.'
+      : 'Create an account to track progress, earn badges, and collect certificates.';
+
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-left">
-          <div className="logo">Skill<span>Verse</span></div>
-          <h2>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
-          <p>Learn, build, and grow - sign in to continue your learning journey.</p>
-          <div style={{marginTop:12,fontSize:13,opacity:0.9}}>Use your email and password to {mode==='login' ? 'sign in' : 'create an account'}.</div>
+    <div className="min-h-screen bg-slate-100 px-4 py-10 dark:bg-slate-950">
+      <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 lg:grid-cols-5">
+        <div className="hidden lg:col-span-2 lg:block">
+          <div className="h-full overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 to-violet-600 p-8 text-white shadow-lg">
+            <div className="text-lg font-extrabold tracking-tight">
+              Skill<span className="text-indigo-200">Verse</span>
+            </div>
+            <div className="mt-10 text-3xl font-extrabold leading-tight">
+              Learn with a clear path, not guesswork.
+            </div>
+            <div className="mt-4 text-sm text-indigo-100">
+              Short lessons, quick checks, and a portfolio you can share.
+            </div>
+            <div className="mt-10 space-y-3 text-sm text-indigo-100">
+              <div className="rounded-2xl bg-white/10 p-4">Bite-size lessons with structure</div>
+              <div className="rounded-2xl bg-white/10 p-4">Quizzes and practice built in</div>
+              <div className="rounded-2xl bg-white/10 p-4">Certificates after completion</div>
+            </div>
+          </div>
         </div>
 
-        <div className="auth-right">
-          <div className="mode-toggle">
-            <button className={mode==='login' ? 'active' : ''} onClick={()=>{ setMode('login'); clearForm() }}>Login</button>
-            <button className={mode==='signup' ? 'active' : ''} onClick={()=>{ setMode('signup'); clearForm() }}>Sign up</button>
-          </div>
-
-          <form onSubmit={submit}>
-            {googleClientId && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => { setAuthMethod('google'); setOut(''); setIsError(false) }}
-                  style={{
-                    flex: 1,
-                    padding: '10px 12px',
-                    borderRadius: 10,
-                    border: authMethod === 'google' ? '2px solid rgba(99,102,241,0.9)' : '1px solid rgba(15,23,42,0.10)',
-                    background: authMethod === 'google' ? 'rgba(99,102,241,0.08)' : '#fff',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Google
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setAuthMethod('email'); setOut(''); setIsError(false) }}
-                  style={{
-                    flex: 1,
-                    padding: '10px 12px',
-                    borderRadius: 10,
-                    border: authMethod === 'email' ? '2px solid rgba(99,102,241,0.9)' : '1px solid rgba(15,23,42,0.10)',
-                    background: authMethod === 'email' ? 'rgba(99,102,241,0.08)' : '#fff',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Email
-                </button>
+        <Card className="lg:col-span-3">
+          <div className="p-6 sm:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{title}</div>
+                <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{subtitle}</div>
               </div>
-            )}
-
-            {authMethod === 'google' && googleClientId && (
-              <div className="form-row" style={{ marginTop: 10 }}>
-                <label>Continue with</label>
-                <div ref={googleBtnRef} />
-                {googleStatus && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>{googleStatus}</div>}
-                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 10 }}>
-                  Prefer email/password? Switch to <button type="button" className="secondary" style={{ padding: '4px 10px', marginLeft: 6 }} onClick={() => setAuthMethod('email')}>Email</button>
-                </div>
-              </div>
-            )}
-
-            {authMethod === 'email' && mode === 'signup' && (
-              <div className="form-row">
-                <label htmlFor="name">Name</label>
-                <input id="name" value={name} onChange={e=>setName(e.target.value)} type="text" required />
-              </div>
-            )}
-
-            {authMethod === 'email' && (
-            <div className="form-row">
-              <label htmlFor="email">Email</label>
-              <input id="email" value={email} onChange={e=>setEmail(e.target.value)} type="email" required />
+              <Segmented
+                value={mode}
+                onChange={(v) => {
+                  setMode(v);
+                  clearForm();
+                }}
+                options={[
+                  { value: 'login', label: 'Login' },
+                  { value: 'signup', label: 'Sign up' }
+                ]}
+              />
             </div>
-            )}
 
-            {authMethod === 'email' && (
-            <div className="form-row">
-              <label htmlFor="password">Password</label>
-              <input id="password" value={password} onChange={e=>setPassword(e.target.value)} type="password" required />
-            </div>
-            )}
+            {googleClientId ? (
+              <div className="mt-5">
+                <Segmented
+                  value={authMethod}
+                  onChange={(v) => {
+                    setAuthMethod(v);
+                    setOut('');
+                    setIsError(false);
+                  }}
+                  options={[
+                    { value: 'google', label: 'Google' },
+                    { value: 'email', label: 'Email' }
+                  ]}
+                />
+              </div>
+            ) : null}
 
-            {googleClientId && authMethod === 'email' && (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0' }}>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.14)' }} />
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>or</div>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.14)' }} />
-                </div>
-                <div className="form-row" style={{ marginTop: 0 }}>
-                  <label>Continue with</label>
+            <form onSubmit={submit} className="mt-5 space-y-4">
+              {authMethod === 'google' && googleClientId ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Continue with</div>
                   <div ref={googleBtnRef} />
-                  {googleStatus && <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>{googleStatus}</div>}
+                  {googleStatus ? <div className="text-xs text-slate-500 dark:text-slate-400">{googleStatus}</div> : null}
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    Prefer email/password? Switch to <button type="button" className="font-semibold text-indigo-600 dark:text-indigo-400" onClick={() => setAuthMethod('email')}>Email</button>.
+                  </div>
                 </div>
-              </>
-            )}
+              ) : null}
 
-            {authMethod === 'email' && (
-              <button className="primary" type="submit">{mode === 'login' ? 'Login' : 'Create account'}</button>
-            )}
-          </form>
+              {authMethod === 'email' && mode === 'signup' ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Name</div>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} type="text" required />
+                </div>
+              ) : null}
 
-          <div className="auth-links">
-            <a href="/forgot-password">Forgot password?</a>
-            <button className="secondary" onClick={()=>{ setMode(mode==='login' ? 'signup' : 'login'); clearForm() }}>
-              {mode==='login' ? 'Create account' : 'Back to login'}
-            </button>
+              {authMethod === 'email' ? (
+                <>
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Email</div>
+                    <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Password</div>
+                    <Input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
+                  </div>
+
+                  {googleClientId ? (
+                    <div className="pt-2">
+                      <div className="flex items-center gap-3">
+                        <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">or</div>
+                        <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Continue with</div>
+                        <div ref={googleBtnRef} />
+                        {googleStatus ? <div className="text-xs text-slate-500 dark:text-slate-400">{googleStatus}</div> : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <Button className="w-full" type="submit" variant="primary">
+                    {mode === 'login' ? 'Login' : 'Create account'}
+                  </Button>
+                </>
+              ) : null}
+            </form>
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+              <a href="/forgot-password" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
+                Forgot password?
+              </a>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setMode(mode === 'login' ? 'signup' : 'login');
+                  clearForm();
+                }}
+              >
+                {mode === 'login' ? 'Create account' : 'Back to login'}
+              </Button>
+            </div>
+
+            {out ? (
+              <div
+                className={[
+                  'mt-5 rounded-2xl border p-4 text-sm',
+                  isError
+                    ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-200'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200'
+                ].join(' ')}
+              >
+                {out}
+              </div>
+            ) : null}
           </div>
-
-          {out && <div className={`auth-out ${isError ? 'error' : 'success'}`} style={{marginTop:12}}>{out}</div>}
-        </div>
+        </Card>
       </div>
     </div>
-  )
+  );
 }

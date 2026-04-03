@@ -6,8 +6,13 @@ const User = require('../models/User');
 const Course = require('../models/Course');
 const Certificate = require('../models/Certificate');
 const Notification = require('../models/Notification');
+const ProjectSubmission = require('../models/ProjectSubmission');
 const authMiddleware = require('../middleware/auth');
 const { notifyAllAdmins, notifyUser } = require('../utils/notifications');
+const { sendEmail } = require('../utils/email');
+const fs = require('fs');
+const path = require('path');
+const { isAllowedAttachmentMime, writeProjectAttachment, attachmentPath } = require('../utils/projectUploads');
 const { OAuth2Client } = require('google-auth-library');
 
 const router = express.Router();
@@ -52,6 +57,19 @@ function uniqueLessonIds(completedLessons) {
     if (x?.lessonId) ids.add(String(x.lessonId));
   });
   return ids;
+}
+
+function safeUrl(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  if (raw.length > 500) return raw.slice(0, 500);
+  try {
+    const u = new URL(raw);
+    if (!['http:', 'https:'].includes(u.protocol)) return '';
+    return u.toString();
+  } catch {
+    return '';
+  }
 }
 
 async function issueCertificateIfNeeded({ user, course, progressEntry }) {
@@ -118,6 +136,14 @@ async function issueCertificateIfNeeded({ user, course, progressEntry }) {
     meta: { userId: String(user._id), courseId: String(course._id), certificateId }
   }).catch(() => null);
 
+  const frontend = String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  sendEmail({
+    to: user.email,
+    subject: 'Your Skillverse certificate is ready',
+    text: `You earned a certificate for ${course.title}. View/download it here: ${frontend}/certificates`,
+    html: `<p>You earned a certificate for <b>${course.title}</b>.</p><p>View/download it here: <a href="${frontend}/certificates">${frontend}/certificates</a></p>`
+  }).catch(() => null);
+
   return certificate;
 }
 
@@ -150,9 +176,21 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
       }
     });
 
-    let displayCourses = user.enrolledCourses || [];
-    if (displayCourses.length === 0) {
-      displayCourses = await Course.find().sort({ createdAt: -1 }).limit(8);
+    const enrolledCourses = user.enrolledCourses || [];
+    const enrolledIds = new Set(enrolledCourses.map((c) => String(c?._id)).filter(Boolean));
+
+    // Dashboard should still feel "full" even when a student enrolled in only 1 course.
+    // Show enrolled courses first, then fill the remaining slots with published courses.
+    const displayCourses = [...enrolledCourses];
+    const remaining = Math.max(0, 8 - displayCourses.length);
+    if (remaining > 0) {
+      const extras = await Course.find({
+        _id: { $nin: Array.from(enrolledIds) },
+        $or: [{ status: 'published' }, { status: { $exists: false } }]
+      })
+        .sort({ createdAt: -1 })
+        .limit(remaining);
+      displayCourses.push(...extras);
     }
 
     const courses = displayCourses.map((course) => {
@@ -236,6 +274,396 @@ router.get('/me', authMiddleware, requireStudent, async (req, res) => {
     res.json({ user });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load profile' });
+  }
+});
+
+router.get('/notes', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const courseId = String(req.query.courseId || '').trim();
+    const lessonId = String(req.query.lessonId || '').trim();
+    if (!courseId || !isObjectId(courseId)) return res.status(400).json({ error: 'Valid courseId is required' });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
+
+    const entry = (user.progress || []).find((p) => p.course && String(p.course) === String(courseId));
+    const note = entry?.notes?.find((n) => String(n.lessonId || '') === lessonId) || null;
+    res.json({ note: { lessonId, text: note?.text || '', updatedAt: note?.updatedAt || null } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load notes' });
+  }
+});
+
+router.put('/notes', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const { courseId, lessonId = '', text = '' } = req.body || {};
+    if (!courseId || !isObjectId(courseId)) return res.status(400).json({ error: 'Valid courseId is required' });
+
+    const safeLessonId = String(lessonId || '').trim();
+    const safeText = String(text ?? '').slice(0, 8000);
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
+
+    let entry = (user.progress || []).find((p) => p.course && String(p.course) === String(courseId));
+    if (!entry) {
+      user.progress.push({ course: courseId, percent: 0, notes: [] });
+      entry = user.progress[user.progress.length - 1];
+    }
+
+    entry.notes = Array.isArray(entry.notes) ? entry.notes : [];
+    let note = entry.notes.find((n) => String(n.lessonId || '') === safeLessonId);
+    if (!note) {
+      entry.notes.push({ lessonId: safeLessonId, text: safeText, updatedAt: new Date() });
+      note = entry.notes[entry.notes.length - 1];
+    } else {
+      note.text = safeText;
+      note.updatedAt = new Date();
+    }
+
+    await user.save();
+    res.json({ note: { lessonId: safeLessonId, text: note.text || '', updatedAt: note.updatedAt || null } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save notes' });
+  }
+});
+
+router.get('/course/:courseId/projects/:lessonId', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    if (!courseId || !isObjectId(courseId)) return res.status(400).json({ error: 'Valid courseId is required' });
+    if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });
+
+    const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    const enrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
+    if (!enrolled) return res.status(400).json({ error: 'You must enroll before accessing project submissions' });
+
+    const found = findLesson(course, lessonId);
+    if (!found) return res.status(404).json({ error: 'Lesson not found' });
+    if (String(found.lesson?.type || '') !== 'project') return res.status(400).json({ error: 'This lesson is not a project' });
+
+    const submission = await ProjectSubmission.findOne({
+      user: user._id,
+      course: course._id,
+      lessonId: String(lessonId)
+    }).populate('reviewedBy', 'name email');
+
+    if (!submission) {
+      return res.json({
+        submission: {
+          repoUrl: '',
+          demoUrl: '',
+          notes: '',
+          status: 'draft',
+          feedback: '',
+          attachments: [],
+          submittedAt: null,
+          reviewedAt: null,
+          reviewedBy: null
+        }
+      });
+    }
+
+    res.json({
+      submission: {
+        id: submission._id,
+        repoUrl: submission.repoUrl || '',
+        demoUrl: submission.demoUrl || '',
+        notes: submission.notes || '',
+        status: submission.status || 'draft',
+        feedback: submission.feedback || '',
+        attachments: Array.isArray(submission.attachments)
+          ? submission.attachments.map((a) => ({
+              fileName: a.fileName,
+              originalName: a.originalName || '',
+              mime: a.mime || '',
+              size: a.size || 0,
+              uploadedAt: a.uploadedAt || null
+            }))
+          : [],
+        submittedAt: submission.submittedAt || null,
+        reviewedAt: submission.reviewedAt || null,
+        reviewedBy: submission.reviewedBy ? { id: submission.reviewedBy._id, name: submission.reviewedBy.name, email: submission.reviewedBy.email } : null
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load project submission' });
+  }
+});
+
+// Upload an attachment (screenshot/pdf/zip) for a project submission (one file per request).
+router.post(
+  '/course/:courseId/projects/:lessonId/attachments',
+  authMiddleware,
+  requireStudent,
+  express.raw({
+    type: ['image/*', 'application/pdf', 'application/zip', 'application/x-zip-compressed', 'text/plain', 'application/octet-stream'],
+    limit: '25mb'
+  }),
+  async (req, res) => {
+    try {
+      const { courseId, lessonId } = req.params;
+      if (!courseId || !isObjectId(courseId)) return res.status(400).json({ error: 'Valid courseId is required' });
+      if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });
+
+      const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      const originalName = String(req.headers['x-filename'] || req.headers['x-file-name'] || '').trim();
+      const size = Buffer.byteLength(req.body || Buffer.alloc(0));
+      if (!size) return res.status(400).json({ error: 'Empty upload' });
+      if (!isAllowedAttachmentMime(mime)) return res.status(415).json({ error: 'Unsupported attachment type (use png/jpg/webp/pdf/zip)' });
+
+      // Enforce size caps per type
+      const isZip = mime === 'application/zip' || mime === 'application/x-zip-compressed';
+      const max = isZip ? 25 * 1024 * 1024 : 15 * 1024 * 1024;
+      if (size > max) return res.status(413).json({ error: `Attachment too large (max ${isZip ? '25MB' : '15MB'})` });
+
+      const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+      if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
+      if (!course) return res.status(404).json({ error: 'Course not found' });
+
+      const enrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
+      if (!enrolled) return res.status(400).json({ error: 'You must enroll before uploading project files' });
+
+      const found = findLesson(course, lessonId);
+      if (!found) return res.status(404).json({ error: 'Lesson not found' });
+      if (String(found.lesson?.type || '') !== 'project') return res.status(400).json({ error: 'This lesson is not a project' });
+
+      const submission = await ProjectSubmission.findOneAndUpdate(
+        { user: user._id, course: course._id, lessonId: String(lessonId) },
+        {
+          $setOnInsert: {
+            lessonTitle: String(found.lesson?.title || ''),
+            status: 'draft'
+          },
+          $set: {
+            lessonTitle: String(found.lesson?.title || '')
+          }
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+
+      const current = Array.isArray(submission.attachments) ? submission.attachments : [];
+      if (current.length >= 8) return res.status(400).json({ error: 'Attachment limit reached (max 8 files)' });
+
+      const stored = writeProjectAttachment({
+        buffer: Buffer.from(req.body),
+        mime,
+        originalName,
+        submissionId: submission._id
+      });
+
+      submission.attachments = current.concat([
+        {
+          fileName: stored.fileName,
+          originalName: originalName || stored.fileName,
+          mime,
+          size,
+          uploadedAt: new Date()
+        }
+      ]);
+      await submission.save();
+
+      res.json({
+        ok: true,
+        attachment: submission.attachments[submission.attachments.length - 1],
+        attachments: submission.attachments
+      });
+    } catch (err) {
+      if (err?.code === 11000) return res.status(409).json({ error: 'Submission already exists. Please retry.' });
+      res.status(err.status || 500).json({ error: err.message || 'Failed to upload attachment' });
+    }
+  }
+);
+
+router.get('/course/:courseId/projects/:lessonId/attachments/:fileName', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const { courseId, lessonId, fileName } = req.params;
+    if (!courseId || !isObjectId(courseId)) return res.status(400).json({ error: 'Valid courseId is required' });
+    if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });
+
+    const submission = await ProjectSubmission.findOne({ user: req.user.id, course: courseId, lessonId: String(lessonId) });
+    if (!submission) return res.status(404).json({ error: 'Submission not found' });
+
+    const att = (submission.attachments || []).find((a) => String(a.fileName) === String(fileName));
+    if (!att) return res.status(404).json({ error: 'Attachment not found' });
+
+    const p = attachmentPath({ submissionId: submission._id, fileName: att.fileName });
+    if (!p || !fs.existsSync(p)) return res.status(404).json({ error: 'File missing' });
+
+    res.setHeader('Content-Type', att.mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${String(att.originalName || att.fileName).replace(/\"/g, '')}"`);
+    fs.createReadStream(p).pipe(res);
+  } catch {
+    res.status(500).json({ error: 'Failed to download attachment' });
+  }
+});
+
+router.delete('/course/:courseId/projects/:lessonId/attachments/:fileName', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const { courseId, lessonId, fileName } = req.params;
+    if (!courseId || !isObjectId(courseId)) return res.status(400).json({ error: 'Valid courseId is required' });
+    if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });
+
+    const submission = await ProjectSubmission.findOne({ user: req.user.id, course: courseId, lessonId: String(lessonId) });
+    if (!submission) return res.status(404).json({ error: 'Submission not found' });
+    if (submission.status === 'approved') return res.status(400).json({ error: 'Cannot remove attachments after approval' });
+
+    const att = (submission.attachments || []).find((a) => String(a.fileName) === String(fileName));
+    if (!att) return res.status(404).json({ error: 'Attachment not found' });
+
+    const p = attachmentPath({ submissionId: submission._id, fileName: att.fileName });
+    if (p && fs.existsSync(p)) {
+      try {
+        fs.unlinkSync(p);
+      } catch {
+        // ignore
+      }
+    }
+
+    submission.attachments = (submission.attachments || []).filter((a) => String(a.fileName) !== String(fileName));
+    await submission.save();
+    res.json({ ok: true, attachments: submission.attachments || [] });
+  } catch {
+    res.status(500).json({ error: 'Failed to remove attachment' });
+  }
+});
+
+router.put('/course/:courseId/projects/:lessonId', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    if (!courseId || !isObjectId(courseId)) return res.status(400).json({ error: 'Valid courseId is required' });
+    if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });
+
+    const { repoUrl, demoUrl, notes } = req.body || {};
+    const safeRepoUrl = safeUrl(repoUrl);
+    const safeDemoUrl = safeUrl(demoUrl);
+    const safeNotes = String(notes ?? '').slice(0, 6000);
+
+    if (!safeRepoUrl && !safeDemoUrl && !safeNotes.trim()) {
+      return res.status(400).json({ error: 'Add a repo link, demo link, or notes before submitting' });
+    }
+
+    const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    const enrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
+    if (!enrolled) return res.status(400).json({ error: 'You must enroll before submitting projects' });
+
+    const found = findLesson(course, lessonId);
+    if (!found) return res.status(404).json({ error: 'Lesson not found' });
+    if (String(found.lesson?.type || '') !== 'project') return res.status(400).json({ error: 'This lesson is not a project' });
+
+    const updated = await ProjectSubmission.findOneAndUpdate(
+      { user: user._id, course: course._id, lessonId: String(lessonId) },
+      {
+        $set: {
+          lessonTitle: String(found.lesson?.title || ''),
+          repoUrl: safeRepoUrl,
+          demoUrl: safeDemoUrl,
+          notes: safeNotes,
+          status: 'submitted',
+          submittedAt: new Date()
+        }
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    notifyUser(user._id, {
+      type: 'info',
+      title: 'Project submitted',
+      message: `Project submitted for ${found.lesson?.title || 'Project'}.`,
+      link: `/courses/${course._id}`,
+      meta: { courseId: String(course._id), lessonId: String(lessonId) }
+    }).catch(() => null);
+
+    notifyAllAdmins({
+      type: 'info',
+      title: 'Project submission',
+      message: `${user.email} submitted a project: ${found.lesson?.title || 'Project'} (${course.title || 'Course'}).`,
+      link: '/admin/projects',
+      meta: { userId: String(user._id), courseId: String(course._id), lessonId: String(lessonId) }
+    }).catch(() => null);
+
+    sendEmail({
+      to: user.email,
+      subject: 'Skillverse project submitted',
+      text: `We received your project submission for ${found.lesson?.title || 'Project'} (${course.title || 'Course'}). Our team will review it soon.`,
+      html: `<p>We received your project submission for <b>${found.lesson?.title || 'Project'}</b> (${course.title || 'Course'}).</p><p>Our team will review it soon.</p>`
+    }).catch(() => null);
+
+    res.json({
+      submission: {
+        id: updated._id,
+        repoUrl: updated.repoUrl || '',
+        demoUrl: updated.demoUrl || '',
+        notes: updated.notes || '',
+        status: updated.status || 'submitted',
+        feedback: updated.feedback || '',
+        attachments: Array.isArray(updated.attachments)
+          ? updated.attachments.map((a) => ({
+              fileName: a.fileName,
+              originalName: a.originalName || '',
+              mime: a.mime || '',
+              size: a.size || 0,
+              uploadedAt: a.uploadedAt || null
+            }))
+          : [],
+        submittedAt: updated.submittedAt || null,
+        reviewedAt: updated.reviewedAt || null
+      }
+    });
+  } catch (err) {
+    // Unique index race on first upsert
+    if (err?.code === 11000) return res.status(409).json({ error: 'Submission already exists. Please retry.' });
+    res.status(500).json({ error: 'Failed to submit project' });
+  }
+});
+
+router.get('/me/projects', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
+
+    const items = await ProjectSubmission.find({ user: user._id })
+      .populate('course', 'title category level')
+      .sort({ updatedAt: -1 })
+      .limit(200);
+
+    res.json({
+      items: (items || []).map((s) => ({
+        id: s._id,
+        status: s.status || 'draft',
+        lessonId: s.lessonId,
+        lessonTitle: s.lessonTitle || '',
+        repoUrl: s.repoUrl || '',
+        demoUrl: s.demoUrl || '',
+        notes: s.notes || '',
+        feedback: s.feedback || '',
+        submittedAt: s.submittedAt || null,
+        reviewedAt: s.reviewedAt || null,
+        updatedAt: s.updatedAt || null,
+        attachmentCount: Array.isArray(s.attachments) ? s.attachments.length : 0,
+        course: s.course ? { id: s.course._id, title: s.course.title, category: s.course.category, level: s.course.level } : null
+      }))
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to load projects' });
   }
 });
 
@@ -669,11 +1097,57 @@ router.post('/course/:courseId/lessons/:lessonId/quiz', authMiddleware, requireS
       entry.completedLessons = entry.completedLessons || [];
       entry.completedLessons.push({ lessonId: String(lessonId), completedAt: new Date() });
       entry.percent = totalLessons > 0 ? Math.min(100, Math.round(((completed.size + 1) / totalLessons) * 100)) : (entry.percent || 0);
+      
+      // Award XP for passing a quiz lesson
+      user.xp = (user.xp || 0) + 25; // 25 XP per passed quiz
+      
+      // Update last activity for streak tracking
+      const today = new Date().toDateString();
+      const lastActivity = user.lastActivityDate ? user.lastActivityDate.toDateString() : null;
+      if (lastActivity !== today) {
+        if (lastActivity === new Date(Date.now() - 86400000).toDateString()) {
+          // Consecutive day
+          user.currentStreak = (user.currentStreak || 0) + 1;
+        } else {
+          // Streak broken
+          user.currentStreak = 1;
+        }
+        user.lastActivityDate = new Date();
+      }
     } else if (totalLessons > 0) {
       entry.percent = Math.min(100, Math.round((completed.size / totalLessons) * 100));
     }
 
     const certificate = await issueCertificateIfNeeded({ user, course, progressEntry: entry });
+    
+    // Award XP and badge for completing a course
+    if (certificate && !user.certificates?.some(c => c.certificateId === certificate.certificateId)) {
+      user.xp = (user.xp || 0) + 100; // 100 XP for course completion
+      
+      // Award badge for first course completion
+      const courseCount = await Certificate.countDocuments({ user: user._id });
+      if (courseCount === 1) {
+        user.badges = user.badges || [];
+        user.badges.push({
+          name: 'First Course',
+          description: 'Completed your first course on Skillverse',
+          icon: '🏆',
+          earnedAt: new Date()
+        });
+      }
+      
+      // Award badge for 5 courses
+      if (courseCount === 5) {
+        user.badges = user.badges || [];
+        user.badges.push({
+          name: 'Course Collector',
+          description: 'Completed 5 courses',
+          icon: '📚',
+          earnedAt: new Date()
+        });
+      }
+    }
+    
     await user.save();
 
     res.json({
@@ -708,6 +1182,40 @@ router.get('/me/certificates', authMiddleware, requireStudent, async (req, res) 
     res.json({ items });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load certificates' });
+  }
+});
+
+// Download certificate as PDF
+router.get('/me/certificates/:certificateId/download', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
+
+    const certificate = await Certificate.findOne({
+      certificateId: req.params.certificateId,
+      user: user._id
+    }).populate('course', 'title');
+
+    if (!certificate) return res.status(404).json({ error: 'Certificate not found' });
+
+    const { generateCertificatePDF } = require('../utils/certificate');
+
+    const pdfBuffer = await generateCertificatePDF({
+      certificateId: certificate.certificateId,
+      studentName: user.name || user.email,
+      courseName: certificate.course?.title || 'Course',
+      score: Math.round(certificate.scorePercent || 100),
+      issueDate: certificate.issuedAt?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0]
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Skillverse-Certificate-${certificate.certificateId}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to generate certificate PDF' });
   }
 });
 
@@ -773,6 +1281,85 @@ router.post('/notifications/read-all', authMiddleware, requireStudent, async (re
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to mark notifications as read' });
+  }
+});
+
+// Leaderboard - public endpoint
+router.get('/leaderboard', async (req, res) => {
+  try {
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
+    const sortBy = String(req.query.sortBy || 'xp'); // xp | streak | certificates
+    
+    let sortField = { xp: -1 };
+    if (sortBy === 'streak') {
+      sortField = { currentStreak: -1, xp: -1 };
+    } else if (sortBy === 'certificates') {
+      sortField = { 'certificates': -1, xp: -1 };
+    }
+
+    const leaderboard = await User.find({
+      isActive: true,
+      isVerified: true,
+      role: 'student'
+    })
+      .select('name avatarUrl headline xp badges currentStreak certificates createdAt')
+      .sort(sortField)
+      .limit(limit);
+
+    const items = leaderboard.map((user, index) => ({
+      rank: index + 1,
+      id: String(user._id),
+      name: user.name || 'Anonymous',
+      avatarUrl: user.avatarUrl || '',
+      headline: user.headline || '',
+      xp: user.xp || 0,
+      badges: (user.badges || []).slice(0, 3), // Top 3 badges
+      badgeCount: (user.badges || []).length,
+      currentStreak: user.currentStreak || 0,
+      certificateCount: (user.certificates || []).length,
+      joinedAt: user.createdAt
+    }));
+
+    res.json({ items, sortBy, limit});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load leaderboard' });
+  }
+});
+
+// User stats - authenticated endpoint
+router.get('/me/stats', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Get user's rank
+    const rank = await User.countDocuments({
+      xp: { $gt: user.xp || 0 },
+      isActive: true,
+      isVerified: true,
+      role: 'student'
+    }).then(count => count + 1);
+
+    const totalUsers = await User.countDocuments({
+      isActive: true,
+      isVerified: true,
+      role: 'student'
+    });
+
+    res.json({
+      xp: user.xp || 0,
+      badges: user.badges || [],
+      currentStreak: user.currentStreak || 0,
+      certificateCount: (user.certificates || []).length,
+      coursesEnrolled: (user.enrolledCourses || []).length,
+      rank,
+      totalUsers,
+      percentile: totalUsers > 0 ? Math.round(((totalUsers - rank + 1) / totalUsers) * 100) : 0
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load stats' });
   }
 });
 

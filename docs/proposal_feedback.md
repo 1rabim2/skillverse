@@ -12,7 +12,7 @@ Source text extracted from `docs/proposal_extracted.txt`.
 
 ## Line-level writing fixes (quick wins)
 
-- `docs/proposal_extracted.txt:2`: "Skill Verse â€“" shows an encoding artifact. Use "Skill Verse -".
+- `docs/proposal_extracted.txt:2`: Encoding artifact fixed to "Skill Verse -".
 - `docs/proposal_extracted.txt:19-24`: Many missing spaces and punctuation breaks:
   - "e learning" -> "e-learning" (be consistent).
   - "skill pathsauto generated" -> "skill paths, auto-generated".
@@ -66,4 +66,3 @@ Source text extracted from `docs/proposal_extracted.txt`.
 13. References
 
 Next: a cleaned, ready-to-paste rewrite is in `docs/SkillVerse_FYP_Proposal_Rewrite.md`.
-

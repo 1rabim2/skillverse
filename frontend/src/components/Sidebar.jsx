@@ -18,6 +18,11 @@ export default function Sidebar({ onLogout }){
             </NavLink>
           </li>
           <li>
+            <NavLink to="/leaderboard" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Leaderboard
+            </NavLink>
+          </li>
+          <li>
             <NavLink to="/portfolio" className={({ isActive }) => (isActive ? 'active' : '')}>
               Portfolio
             </NavLink>

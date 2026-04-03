@@ -16,7 +16,6 @@ export default function AdminLogin() {
     setLoading(true);
     try {
       const res = await adminApi.post('/auth/login', { email, password });
-      localStorage.setItem('adminToken', res.data.token);
       localStorage.setItem('adminData', JSON.stringify(res.data.admin));
       window.location.href = '/admin/dashboard';
     } catch (err) {
@@ -31,7 +30,6 @@ export default function AdminLogin() {
       setError('');
       setGoogleStatus('Signing in with Google...');
       const res = await adminApi.post('/auth/google', { credential });
-      localStorage.setItem('adminToken', res.data.token);
       localStorage.setItem('adminData', JSON.stringify(res.data.admin));
       window.location.href = '/admin/dashboard';
     } catch (err) {

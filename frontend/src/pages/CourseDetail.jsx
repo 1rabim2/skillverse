@@ -1,5 +1,13 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
+import { apiFetch } from '../lib/apiFetch';
+import VideoEmbed from '../components/VideoEmbed';
+import ResourceEmbed from '../components/ResourceEmbed';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { uploadUserVideo } from '../lib/uploads';
+import { resolveAssetUrl } from '../lib/assets';
 import { API_BASE } from '../lib/apiBase';
 
 function getCurriculum(course) {
@@ -36,13 +44,24 @@ function totalLessons(chapters) {
   return (chapters || []).reduce((sum, ch) => sum + ((ch.lessons || []).length), 0);
 }
 
+function formatBytes(bytes) {
+  const b = Number(bytes);
+  if (!Number.isFinite(b) || b <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const idx = Math.min(units.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
+  const value = b / Math.pow(1024, idx);
+  return `${value.toFixed(value >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+}
+
 export default function CourseDetail() {
   const { id } = useParams();
-  const token = localStorage.getItem('token');
+  const [authed, setAuthed] = React.useState(false);
+  const [authChecked, setAuthChecked] = React.useState(false);
 
   const [course, setCourse] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const [videosLocked, setVideosLocked] = React.useState(false);
   const [enrolled, setEnrolled] = React.useState(false);
   const [actionMsg, setActionMsg] = React.useState('');
   const [updating, setUpdating] = React.useState(false);
@@ -51,6 +70,12 @@ export default function CourseDetail() {
   const [quizAnswers, setQuizAnswers] = React.useState([]);
   const [quizResult, setQuizResult] = React.useState(null);
   const [quizSubmitting, setQuizSubmitting] = React.useState(false);
+  const [noteText, setNoteText] = React.useState('');
+  const [noteBusy, setNoteBusy] = React.useState(false);
+  const [noteMsg, setNoteMsg] = React.useState('');
+  const [projectSub, setProjectSub] = React.useState({ repoUrl: '', demoUrl: '', notes: '', status: 'draft', feedback: '', attachments: [], submittedAt: null, reviewedAt: null });
+  const [projectBusy, setProjectBusy] = React.useState(false);
+  const [projectMsg, setProjectMsg] = React.useState('');
 
   React.useEffect(() => {
     let mounted = true;
@@ -59,10 +84,13 @@ export default function CourseDetail() {
       try {
         setLoading(true);
         setError('');
-        const res = await fetch(`${API_BASE}/courses/${encodeURIComponent(id)}`);
+        const res = await apiFetch(`/courses/${encodeURIComponent(id)}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to load course');
-        if (mounted) setCourse(data.course);
+        if (mounted) {
+          setCourse(data.course);
+          setVideosLocked(!!data?.meta?.videosLocked);
+        }
       } catch (err) {
         if (mounted) setError(err.message);
       } finally {
@@ -77,24 +105,29 @@ export default function CourseDetail() {
   }, [id]);
 
   React.useEffect(() => {
-    if (!token) return;
     let mounted = true;
 
     async function loadEnrollment() {
       try {
-        const res = await fetch(`${API_BASE}/user/me`, { headers: { Authorization: `Bearer ${token}` } });
-        const data = await res.json();
+        const res = await apiFetch('/user/me');
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const msg = data?.error || '';
-          if (res.status === 404 && msg.toLowerCase().includes('user not found')) {
-            localStorage.removeItem('token');
+          if (mounted) {
+            setAuthed(false);
+            setEnrolled(false);
           }
           return;
         }
+        if (mounted) setAuthed(true);
         const ids = (data.user?.enrolledCourses || []).map((c) => c?._id || c?.id).filter(Boolean);
         if (mounted) setEnrolled(ids.includes(id));
       } catch {
-        // ignore
+        if (mounted) {
+          setAuthed(false);
+          setEnrolled(false);
+        }
+      } finally {
+        if (mounted) setAuthChecked(true);
       }
     }
 
@@ -102,7 +135,7 @@ export default function CourseDetail() {
     return () => {
       mounted = false;
     };
-  }, [id, token]);
+  }, [id]);
 
   React.useEffect(() => {
     if (!course) return;
@@ -112,7 +145,201 @@ export default function CourseDetail() {
   }, [course]);
 
   React.useEffect(() => {
-    if (!token) return;
+    if (!authed) return;
+    if (!course) return;
+    const lessonId = selectedLesson?._id ? String(selectedLesson._id) : '';
+
+    let mounted = true;
+    async function loadNote() {
+      try {
+        setNoteMsg('');
+        setNoteBusy(true);
+        const res = await apiFetch(
+          `/user/notes?courseId=${encodeURIComponent(course._id)}&lessonId=${encodeURIComponent(lessonId)}`
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return;
+        if (mounted) setNoteText(String(data?.note?.text || ''));
+      } catch {
+        // ignore
+      } finally {
+        if (mounted) setNoteBusy(false);
+      }
+    }
+
+    loadNote();
+    return () => {
+      mounted = false;
+    };
+  }, [authed, course, selectedLessonId]);
+
+  React.useEffect(() => {
+    if (!authed) return;
+    if (!course) return;
+    if (!selectedLesson?._id) return;
+    if (String(selectedLesson?.type || '') !== 'project') return;
+
+    let mounted = true;
+    async function loadProject() {
+      try {
+        setProjectMsg('');
+        setProjectBusy(true);
+        const res = await apiFetch(
+          `/user/course/${encodeURIComponent(course._id)}/projects/${encodeURIComponent(String(selectedLesson._id))}`
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return;
+        if (!mounted) return;
+        setProjectSub({
+          repoUrl: String(data?.submission?.repoUrl || ''),
+          demoUrl: String(data?.submission?.demoUrl || ''),
+          notes: String(data?.submission?.notes || ''),
+          status: String(data?.submission?.status || 'draft'),
+          feedback: String(data?.submission?.feedback || ''),
+          attachments: Array.isArray(data?.submission?.attachments) ? data.submission.attachments : [],
+          submittedAt: data?.submission?.submittedAt || null,
+          reviewedAt: data?.submission?.reviewedAt || null
+        });
+      } catch {
+        // ignore
+      } finally {
+        if (mounted) setProjectBusy(false);
+      }
+    }
+
+    loadProject();
+    return () => {
+      mounted = false;
+    };
+  }, [authed, course, selectedLessonId]);
+
+  async function submitProject() {
+    if (!authed || !course || !selectedLesson?._id) return;
+    try {
+      setProjectMsg('');
+      setProjectBusy(true);
+      const res = await apiFetch(
+        `/user/course/${encodeURIComponent(course._id)}/projects/${encodeURIComponent(String(selectedLesson._id))}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            repoUrl: projectSub.repoUrl,
+            demoUrl: projectSub.demoUrl,
+            notes: projectSub.notes
+          })
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to submit project');
+      setProjectSub((p) => ({
+        ...p,
+        status: String(data?.submission?.status || 'submitted'),
+        submittedAt: data?.submission?.submittedAt || new Date().toISOString()
+      }));
+      setProjectMsg('Submitted');
+      setTimeout(() => setProjectMsg(''), 1600);
+    } catch (err) {
+      setProjectMsg(err?.message || 'Failed to submit');
+    } finally {
+      setProjectBusy(false);
+    }
+  }
+
+  async function onDemoVideoPick(file) {
+    if (!authed) return;
+    if (!file) return;
+    try {
+      setProjectMsg('Uploading video...');
+      setProjectBusy(true);
+      const uploaded = await uploadUserVideo(file);
+      const url = String(uploaded?.url || '');
+      if (!url) throw new Error('Upload failed');
+      setProjectSub((p) => ({ ...p, demoUrl: url }));
+      setProjectMsg('Video uploaded');
+      setTimeout(() => setProjectMsg(''), 1600);
+    } catch (err) {
+      setProjectMsg(err?.message || 'Failed to upload video');
+    } finally {
+      setProjectBusy(false);
+    }
+  }
+
+  async function uploadProjectAttachment(file) {
+    if (!authed || !course || !selectedLesson?._id) return;
+    if (!file) return;
+    try {
+      setProjectMsg('Uploading file...');
+      setProjectBusy(true);
+      const res = await apiFetch(
+        `/user/course/${encodeURIComponent(course._id)}/projects/${encodeURIComponent(String(selectedLesson._id))}/attachments`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': file.type || 'application/octet-stream',
+            'X-Filename': file.name || 'attachment'
+          },
+          body: file
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to upload attachment');
+      setProjectSub((p) => ({ ...p, attachments: Array.isArray(data?.attachments) ? data.attachments : p.attachments }));
+      setProjectMsg('File uploaded');
+      setTimeout(() => setProjectMsg(''), 1600);
+    } catch (err) {
+      setProjectMsg(err?.message || 'Failed to upload attachment');
+    } finally {
+      setProjectBusy(false);
+    }
+  }
+
+  async function removeProjectAttachment(fileName) {
+    if (!authed || !course || !selectedLesson?._id) return;
+    if (!fileName) return;
+    try {
+      setProjectMsg('Removing...');
+      setProjectBusy(true);
+      const res = await apiFetch(
+        `/user/course/${encodeURIComponent(course._id)}/projects/${encodeURIComponent(String(selectedLesson._id))}/attachments/${encodeURIComponent(String(fileName))}`,
+        { method: 'DELETE' }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to remove attachment');
+      setProjectSub((p) => ({ ...p, attachments: Array.isArray(data?.attachments) ? data.attachments : p.attachments }));
+      setProjectMsg('Removed');
+      setTimeout(() => setProjectMsg(''), 1200);
+    } catch (err) {
+      setProjectMsg(err?.message || 'Failed to remove attachment');
+    } finally {
+      setProjectBusy(false);
+    }
+  }
+
+  async function saveNote() {
+    if (!authed || !course) return;
+    const lessonId = selectedLesson?._id ? String(selectedLesson._id) : '';
+    try {
+      setNoteMsg('');
+      setNoteBusy(true);
+      const res = await apiFetch('/user/notes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: String(course._id), lessonId, text: noteText })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to save notes');
+      setNoteMsg('Saved');
+      setTimeout(() => setNoteMsg(''), 1500);
+    } catch (err) {
+      setNoteMsg(err?.message || 'Failed to save');
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  React.useEffect(() => {
+    if (!authed) return;
     if (!course) return;
     const { hasLessons } = getCurriculum(course);
     if (!hasLessons) return;
@@ -120,9 +347,7 @@ export default function CourseDetail() {
 
     async function loadProgress() {
       try {
-        const res = await fetch(`${API_BASE}/user/course/${encodeURIComponent(id)}/progress`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const res = await apiFetch(`/user/course/${encodeURIComponent(id)}/progress`);
         const data = await res.json();
         if (!res.ok) return;
         if (mounted) {
@@ -141,19 +366,19 @@ export default function CourseDetail() {
     return () => {
       mounted = false;
     };
-  }, [course, id, token]);
+  }, [authed, course, id]);
 
   async function enroll() {
-    if (!token) {
+    if (!authed) {
       window.location.href = '/login';
       return;
     }
     setUpdating(true);
     setActionMsg('');
     try {
-      const res = await fetch(`${API_BASE}/user/enroll`, {
+      const res = await apiFetch('/user/enroll', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseId: id })
       });
       const data = await res.json();
@@ -168,7 +393,7 @@ export default function CourseDetail() {
   }
 
   async function submitQuiz(lessonId) {
-    if (!token) {
+    if (!authed) {
       window.location.href = '/login';
       return;
     }
@@ -176,9 +401,9 @@ export default function CourseDetail() {
     setQuizResult(null);
     setActionMsg('');
     try {
-      const res = await fetch(`${API_BASE}/user/course/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lessonId)}/quiz`, {
+      const res = await apiFetch(`/user/course/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lessonId)}/quiz`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers: quizAnswers })
       });
       const data = await res.json();
@@ -200,17 +425,14 @@ export default function CourseDetail() {
   }
 
   async function completeLesson(lessonId) {
-    if (!token) {
+    if (!authed) {
       window.location.href = '/login';
       return;
     }
     setUpdating(true);
     setActionMsg('');
     try {
-      const res = await fetch(`${API_BASE}/user/course/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lessonId)}/complete`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch(`/user/course/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lessonId)}/complete`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to complete lesson');
       if (data.progress) {
@@ -232,9 +454,28 @@ export default function CourseDetail() {
     }
   }
 
-  if (loading) return <div style={{ padding: 24 }}>Loading course...</div>;
-  if (error) return <div style={{ padding: 24 }}>Could not load course: {error}</div>;
-  if (!course) return <div style={{ padding: 24 }}>Course not found.</div>;
+  if (loading) {
+    return (
+      <Card className="p-5">
+        <div className="text-sm text-slate-600 dark:text-slate-300">Loading course...</div>
+      </Card>
+    );
+  }
+  if (error) {
+    return (
+      <Card className="p-5">
+        <div className="text-sm font-semibold text-slate-900 dark:text-white">Could not load course</div>
+        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{error}</div>
+      </Card>
+    );
+  }
+  if (!course) {
+    return (
+      <Card className="p-5">
+        <div className="text-sm text-slate-600 dark:text-slate-300">Course not found.</div>
+      </Card>
+    );
+  }
 
   const curriculum = getCurriculum(course);
   const chapters = curriculum.chapters;
@@ -250,70 +491,65 @@ export default function CourseDetail() {
   const quizPassed = !!(quizResult?.passed || latestQuiz?.passed);
 
   return (
-    <div style={{ width: '100%', color: '#0f172a' }}>
-      <div style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ margin: 0 }}>{course.title}</h1>
-            <p style={{ marginTop: 8, color: '#64748b' }}>
-              {(course.level || 'Beginner')} | {(course.category || 'General')}
-              {course.skillPath?.title ? ` | Skill Path: ${course.skillPath.title}` : ''}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button
-              onClick={() => (window.location.href = '/dashboard')}
-              style={{ border: '1px solid rgba(15,23,42,0.14)', background: '#fff', color: '#0f172a', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
-            >
-              Back to Dashboard
-            </button>
-            <button
-              onClick={() => (window.location.href = '/certificates')}
-              style={{ border: '1px solid rgba(15,23,42,0.14)', background: '#fff', color: '#0f172a', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
-            >
-              My Certificates
-            </button>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{course.title}</h1>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            {(course.level || 'Beginner')} • {(course.category || 'General')}
+            {course.skillPath?.title ? ` • Skill Path: ${course.skillPath.title}` : ''}
+          </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => (window.location.href = '/dashboard')}>Back to Dashboard</Button>
+          <Button variant="outline" onClick={() => (window.location.href = '/certificates')}>My Certificates</Button>
+        </div>
+      </div>
 
         {hasLessons ? (
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'minmax(280px, 360px) 1fr', gap: 16 }}>
-            <div style={{ background: '#fff', border: '1px solid rgba(15,23,42,0.08)', boxShadow: '0 10px 30px rgba(15,23,42,0.05)', borderRadius: 16, padding: 16 }}>
-              <h3 style={{ marginTop: 0, marginBottom: 10 }}>Curriculum</h3>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: 13 }}>
-                <span>Progress</span>
-                <span>{Math.min(100, progress.percent || 0)}%</span>
-              </div>
-              <div style={{ height: 10, borderRadius: 999, overflow: 'hidden', background: '#f1f5f9', border: '1px solid rgba(15,23,42,0.08)', marginTop: 8 }}>
-                <div style={{ height: '100%', width: `${Math.min(100, progress.percent || 0)}%`, background: 'linear-gradient(90deg,#4F46E5,#FACC15)' }} />
-              </div>
-              <div style={{ marginTop: 10, color: '#64748b', fontSize: 12 }}>
-                {completedSet.size} / {total} lessons completed
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
+            <Card className="p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-white">Curriculum</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {completedSet.size} / {total} lessons completed
+                  </div>
+                </div>
+                <div className="text-sm font-extrabold text-slate-900 dark:text-white">{Math.min(100, progress.percent || 0)}%</div>
               </div>
 
-              {!token && (
-                <div style={{ marginTop: 12, padding: 12, borderRadius: 12, border: '1px solid rgba(15,23,42,0.08)', background: '#f8fafc', color: '#334155', fontSize: 13 }}>
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600"
+                  style={{ width: `${Math.min(100, progress.percent || 0)}%` }}
+                />
+              </div>
+
+              {authChecked && !authed && (
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200">
                   Sign in to enroll, take quizzes, and track progress.
                 </div>
               )}
-              {token && !enrolled && (
-                <button
+              {authed && !enrolled && (
+                <Button
+                  variant="primary"
+                  className="mt-4 w-full bg-emerald-600 shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 focus-visible:outline-emerald-600"
                   disabled={updating}
                   onClick={enroll}
-                  style={{ width: '100%', marginTop: 12, background: '#22c55e', color: '#052e16', border: 'none', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', fontWeight: 700 }}
                 >
                   {updating ? 'Enrolling...' : 'Enroll in Course'}
-                </button>
+                </Button>
               )}
 
-              <div style={{ marginTop: 14 }}>
+              <div className="mt-5">
                 {chapters
                   .slice()
                   .sort((a, b) => (a.order || 0) - (b.order || 0))
                   .map((ch) => (
-                    <div key={ch._id || ch.title} style={{ marginTop: 12 }}>
-                      <div style={{ fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>{ch.title || 'Chapter'}</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div key={ch._id || ch.title} className="mt-4">
+                      <div className="mb-2 text-sm font-extrabold text-slate-900 dark:text-white">{ch.title || 'Chapter'}</div>
+                      <div className="flex flex-col gap-2">
                         {(ch.lessons || [])
                           .slice()
                           .sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -328,21 +564,20 @@ export default function CourseDetail() {
                                   setQuizResult(null);
                                   setQuizAnswers([]);
                                 }}
-                                style={{
-                                  textAlign: 'left',
-                                  borderRadius: 12,
-                                  padding: '10px 10px',
-                                  border: `1px solid ${active ? 'rgba(79,70,229,0.55)' : 'rgba(15,23,42,0.12)'}`,
-                                  background: active ? 'rgba(79,70,229,0.08)' : '#fff',
-                                  color: '#0f172a',
-                                  cursor: 'pointer'
-                                }}
+                                className={[
+                                  'w-full rounded-2xl border px-3 py-3 text-left transition-colors',
+                                  active
+                                    ? 'border-indigo-300 bg-indigo-50/60 dark:border-indigo-900/40 dark:bg-indigo-950/20'
+                                    : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800'
+                                ].join(' ')}
                               >
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                                  <div style={{ fontWeight: 750, fontSize: 13 }}>
-                                    {ls.title || 'Lesson'}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{ls.title || 'Lesson'}</div>
                                   </div>
-                                  <div style={{ fontSize: 12, color: done ? '#16a34a' : '#64748b' }}>{done ? 'Done' : (ls.type || 'reading')}</div>
+                                  <div className={['text-xs font-semibold', done ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'].join(' ')}>
+                                    {done ? 'Done' : (ls.type || 'reading')}
+                                  </div>
                                 </div>
                               </button>
                             );
@@ -351,65 +586,134 @@ export default function CourseDetail() {
                     </div>
                   ))}
               </div>
-            </div>
+            </Card>
 
-            <div style={{ background: '#fff', border: '1px solid rgba(15,23,42,0.08)', boxShadow: '0 10px 30px rgba(15,23,42,0.05)', borderRadius: 16, padding: 16 }}>
-              <h3 style={{ marginTop: 0, marginBottom: 6 }}>{selectedLesson?.title || course.title}</h3>
+            <Card className="p-5">
+              <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">{selectedLesson?.title || course.title}</h3>
               {selected?.chapter?.title && (
-                <div style={{ color: '#64748b', fontSize: 13, marginBottom: 10 }}>
+                <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                   {selected.chapter.title}
                 </div>
               )}
               {course.description && (
-                <p style={{ color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginTop: 0 }}>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">
                   {course.description}
                 </p>
               )}
 
               {selectedLesson?.content && (
-                <div style={{ marginTop: 10, color: '#334155', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">
                   {selectedLesson.content}
                 </div>
               )}
 
+              {videosLocked && String(selectedLesson?.type || '') === 'video' && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+                  <div className="font-extrabold">Video locked</div>
+                  <div className="mt-1 text-amber-800/90 dark:text-amber-200/90">
+                    Subscribe to unlock hosted course videos and continue learning.
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button as="a" href="/subscribe">
+                      Go to subscription
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {(selectedLesson?.videoUrl || selectedLesson?.resourceLink) && (
-                <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div className="mt-4 space-y-4">
                   {selectedLesson?.videoUrl && (
-                    <a href={selectedLesson.videoUrl} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: 800 }}>
-                      Open video
-                    </a>
+                    <>
+                      <VideoEmbed url={resolveAssetUrl(selectedLesson.videoUrl)} title={selectedLesson?.title || 'Lesson video'} />
+                      <div className="flex flex-wrap gap-2">
+                        <Button as="a" variant="outline" href={resolveAssetUrl(selectedLesson.videoUrl)} target="_blank" rel="noreferrer">
+                          Open video link
+                        </Button>
+                      </div>
+                    </>
                   )}
                   {selectedLesson?.resourceLink && (
-                    <a href={selectedLesson.resourceLink} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: 800 }}>
-                      Open resource
-                    </a>
+                    <div className={selectedLesson?.videoUrl ? 'mt-4' : ''}>
+                      <ResourceEmbed url={selectedLesson.resourceLink} title={selectedLesson?.title || 'Lesson resource'} />
+                      <div className="flex flex-wrap gap-2">
+                        <Button as="a" variant="outline" href={selectedLesson.resourceLink} target="_blank" rel="noreferrer">
+                          Open resource link
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
 
+              <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">My Notes</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {noteMsg && (
+                      <div
+                        className={[
+                          'text-xs font-semibold',
+                          noteMsg === 'Saved' ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'
+                        ].join(' ')}
+                      >
+                        {noteMsg}
+                      </div>
+                    )}
+                    <Button type="button" variant="outline" disabled={!authed || noteBusy} onClick={saveNote}>
+                      {noteBusy ? 'Saving...' : 'Save notes'}
+                    </Button>
+                  </div>
+                </div>
+                {authChecked && !authed && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200">
+                    Sign in to write notes for this lesson.
+                  </div>
+                )}
+                <textarea
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="Write what you learned, questions, your own links, code snippets..."
+                  rows={6}
+                  disabled={!authed}
+                  className={[
+                    'mt-3 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm',
+                    'placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200',
+                    'disabled:cursor-not-allowed disabled:opacity-60',
+                    'dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-900/40'
+                  ].join(' ')}
+                />
+              </div>
+
               {selectedQuiz && (
-                <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(15,23,42,0.08)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                    <h4 style={{ margin: 0 }}>Quiz</h4>
-                    <div style={{ fontSize: 12, color: '#64748b' }}>Pass: {selectedQuiz.passPercent || 60}%</div>
+                <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Quiz</h4>
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Pass: {selectedQuiz.passPercent || 60}%</div>
                   </div>
 
-                  {!token && (
-                    <div style={{ marginTop: 10, padding: 12, borderRadius: 12, border: '1px solid rgba(15,23,42,0.08)', background: '#f8fafc', color: '#334155', fontSize: 13 }}>
+                  {authChecked && !authed && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200">
                       Sign in to submit this quiz.
                     </div>
                   )}
 
-                  {token && (
-                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {authed && (
+                    <div className="mt-3 flex flex-col gap-4">
                       {selectedQuizQuestions.map((q, idx) => (
-                        <div key={q._id || idx} style={{ border: '1px solid rgba(15,23,42,0.08)', background: '#f8fafc', borderRadius: 14, padding: 12 }}>
-                          <div style={{ fontWeight: 750, marginBottom: 8 }}>
+                        <div
+                          key={q._id || idx}
+                          className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-100"
+                        >
+                          <div className="mb-3 text-sm font-semibold">
                             {idx + 1}. {q.prompt}
                           </div>
-                          <div style={{ display: 'grid', gap: 8 }}>
+                          <div className="grid gap-2">
                             {(q.options || []).map((opt, oIdx) => (
-                              <label key={`${idx}-${oIdx}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', color: '#0f172a' }}>
+                              <label
+                                key={`${idx}-${oIdx}`}
+                                className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                              >
                                 <input
                                   type="radio"
                                   name={`q-${idx}`}
@@ -421,7 +725,7 @@ export default function CourseDetail() {
                                       return next;
                                     });
                                   }}
-                                  style={{ marginTop: 3 }}
+                                  className="mt-0.5 h-4 w-4 accent-indigo-600"
                                 />
                                 <span>{opt}</span>
                               </label>
@@ -430,45 +734,31 @@ export default function CourseDetail() {
                         </div>
                       ))}
 
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <button
-                          disabled={quizSubmitting || !enrolled}
-                          onClick={() => submitQuiz(String(selectedLesson._id))}
-                          style={{
-                            background: enrolled ? '#4F46E5' : '#cbd5e1',
-                            color: enrolled ? '#fff' : '#475569',
-                            border: 'none',
-                            borderRadius: 12,
-                            padding: '12px 14px',
-                            cursor: enrolled ? 'pointer' : 'not-allowed',
-                            fontWeight: 800
-                          }}
-                        >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button disabled={quizSubmitting || !enrolled} onClick={() => submitQuiz(String(selectedLesson._id))}>
                           {quizSubmitting ? 'Submitting...' : enrolled ? 'Submit quiz' : 'Enroll to submit'}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant={isLessonCompleted ? 'primary' : 'outline'}
+                          className={isLessonCompleted ? 'bg-emerald-600 shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 focus-visible:outline-emerald-600' : ''}
                           disabled={updating || !enrolled || isLessonCompleted || (selectedQuizQuestions.length > 0 && !quizPassed)}
                           onClick={() => completeLesson(String(selectedLesson._id))}
-                          style={{
-                            background: isLessonCompleted ? '#22c55e' : '#fff',
-                            color: isLessonCompleted ? '#052e16' : '#0f172a',
-                            border: `1px solid ${isLessonCompleted ? '#22c55e' : 'rgba(15,23,42,0.12)'}`,
-                            borderRadius: 12,
-                            padding: '12px 14px',
-                            cursor: isLessonCompleted ? 'default' : 'pointer',
-                            fontWeight: 800
-                          }}
                         >
                           {isLessonCompleted ? 'Lesson completed' : updating ? 'Saving...' : selectedQuizQuestions.length > 0 ? 'Complete (pass quiz)' : 'Mark lesson complete'}
-                        </button>
+                        </Button>
                       </div>
 
                       {(quizResult || latestQuiz) && (
-                        <div style={{ padding: 12, borderRadius: 12, border: '1px solid rgba(15,23,42,0.08)', background: '#f8fafc', color: '#334155' }}>
-                          <div style={{ fontWeight: 800, color: (quizResult?.passed || latestQuiz?.passed) ? '#22c55e' : '#f59e0b' }}>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-100">
+                          <div
+                            className={[
+                              'text-sm font-extrabold',
+                              (quizResult?.passed || latestQuiz?.passed) ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'
+                            ].join(' ')}
+                          >
                             {(quizResult?.passed || latestQuiz?.passed) ? 'Passed' : 'Not passed yet'}
                           </div>
-                          <div style={{ marginTop: 4, fontSize: 13, color: '#64748b' }}>
+                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                             Score: {(quizResult?.scorePercent ?? latestQuiz?.scorePercent ?? 0)}% ({(quizResult?.correct ?? latestQuiz?.correct ?? 0)}/{(quizResult?.total ?? latestQuiz?.total ?? 0)} correct)
                           </div>
                         </div>
@@ -479,85 +769,189 @@ export default function CourseDetail() {
               )}
 
               {!selectedQuiz && selectedLesson?._id && (
-                <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button
-                    disabled={updating || !token || !enrolled || isLessonCompleted}
+                <div className="mt-6 flex flex-wrap gap-2">
+                  <Button
+                    variant={isLessonCompleted ? 'primary' : 'secondary'}
+                    className={
+                      isLessonCompleted
+                        ? 'bg-emerald-600 shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 focus-visible:outline-emerald-600'
+                        : 'bg-sky-600 hover:bg-sky-700 focus-visible:outline-sky-600'
+                    }
+                    disabled={updating || !authed || !enrolled || isLessonCompleted}
                     onClick={() => completeLesson(String(selectedLesson._id))}
-                    style={{
-                      background: isLessonCompleted ? '#22c55e' : '#38bdf8',
-                      color: isLessonCompleted ? '#052e16' : '#082f49',
-                      border: 'none',
-                      borderRadius: 12,
-                      padding: '12px 14px',
-                      cursor: isLessonCompleted ? 'default' : 'pointer',
-                      fontWeight: 800
-                    }}
                   >
                     {isLessonCompleted ? 'Lesson completed' : updating ? 'Saving...' : 'Mark lesson complete'}
-                  </button>
+                  </Button>
+                </div>
+              )}
+
+              {selectedLesson?._id && String(selectedLesson?.type || '') === 'project' && (
+                <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Project submission</h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {projectMsg && (
+                        <div
+                          className={[
+                            'text-xs font-semibold',
+                            projectMsg === 'Submitted' ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'
+                          ].join(' ')}
+                        >
+                          {projectMsg}
+                        </div>
+                      )}
+                      <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Status: <span className="font-extrabold text-slate-900 dark:text-slate-100">{projectSub.status || 'draft'}</span>
+                      </div>
+                      <Button type="button" disabled={!authed || projectBusy} onClick={submitProject}>
+                        {projectBusy ? 'Submitting...' : 'Submit project'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {authChecked && !authed && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200">
+                      Sign in to submit your project.
+                    </div>
+                  )}
+
+                  {authed && (
+                    <div className="mt-3 grid gap-3 lg:max-w-3xl">
+                      <div className="grid gap-1.5">
+                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">GitHub repo URL (recommended)</label>
+                        <Input
+                          value={projectSub.repoUrl}
+                          onChange={(e) => setProjectSub((p) => ({ ...p, repoUrl: e.target.value }))}
+                          placeholder="https://github.com/username/project"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Live demo URL (optional)</label>
+                        <Input
+                          value={projectSub.demoUrl}
+                          onChange={(e) => setProjectSub((p) => ({ ...p, demoUrl: e.target.value }))}
+                          placeholder="https://your-demo.vercel.app"
+                        />
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                            Upload demo video
+                            <input
+                              type="file"
+                              accept="video/*"
+                              className="hidden"
+                              disabled={projectBusy}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                onDemoVideoPick(file || null);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                          {projectSub.demoUrl ? (
+                            <a
+                              href={resolveAssetUrl(projectSub.demoUrl)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-semibold text-indigo-700 hover:underline dark:text-indigo-300"
+                            >
+                              Open
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="grid gap-1.5">
+                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Notes (what you built, how to run, issues)</label>
+                        <textarea
+                          value={projectSub.notes}
+                          onChange={(e) => setProjectSub((p) => ({ ...p, notes: e.target.value }))}
+                          rows={4}
+                          placeholder="Features completed, how to run, username/password for demo, screenshots, etc."
+                          className={[
+                            'w-full rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm',
+                            'placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200',
+                            'disabled:cursor-not-allowed disabled:opacity-60',
+                            'dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-900/40'
+                          ].join(' ')}
+                        />
+                      </div>
+
+                      {projectSub.feedback ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-100">
+                          <div className="mb-1 text-sm font-extrabold">Feedback</div>
+                          <div className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{projectSub.feedback}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               )}
 
               {actionMsg && (
-                <div style={{ marginTop: 12, background: '#f8fafc', border: '1px solid rgba(15,23,42,0.08)', borderRadius: 12, padding: 10, color: '#0f172a' }}>
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-100">
                   {actionMsg}
                 </div>
               )}
-            </div>
+            </Card>
           </div>
         ) : (
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: 16 }}>
-            <div style={{ background: '#fff', border: '1px solid rgba(15,23,42,0.08)', boxShadow: '0 10px 30px rgba(15,23,42,0.05)', borderRadius: 16, padding: 16 }}>
-              <h3 style={{ marginTop: 0 }}>About this course</h3>
-              <p style={{ color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{course.description || 'No description yet.'}</p>
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+            <Card className="p-5">
+              <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">About this course</h3>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">{course.description || 'No description yet.'}</p>
 
               {course.videoUrl && (
-                <div style={{ marginTop: 14 }}>
-                  <h4 style={{ marginBottom: 8 }}>Video</h4>
-                  <a href={course.videoUrl} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: 800 }}>
-                    Open video link
-                  </a>
+                <div className="mt-5">
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Video</h4>
+                  <VideoEmbed url={resolveAssetUrl(course.videoUrl)} title={course?.title || 'Course video'} />
+                  <div className="mt-2">
+                    <Button as="a" variant="outline" href={resolveAssetUrl(course.videoUrl)} target="_blank" rel="noreferrer">
+                      Open video link
+                    </Button>
+                  </div>
                 </div>
               )}
 
               {course.resourceLink && (
-                <div style={{ marginTop: 14 }}>
-                  <h4 style={{ marginBottom: 8 }}>Resources</h4>
-                  <a href={course.resourceLink} target="_blank" rel="noreferrer" style={{ color: '#4F46E5', fontWeight: 800 }}>
-                    Open resource link
-                  </a>
+                <div className="mt-5">
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Resources</h4>
+                  <ResourceEmbed url={course.resourceLink} title={course?.title || 'Course resource'} />
+                  <div className="mt-2">
+                    <Button as="a" variant="outline" href={course.resourceLink} target="_blank" rel="noreferrer">
+                      Open resource link
+                    </Button>
+                  </div>
                 </div>
               )}
-            </div>
+            </Card>
 
-            <div style={{ background: '#fff', border: '1px solid rgba(15,23,42,0.08)', boxShadow: '0 10px 30px rgba(15,23,42,0.05)', borderRadius: 16, padding: 16 }}>
-              <h3 style={{ marginTop: 0 }}>Actions</h3>
-              {!token && (
-                <p style={{ color: '#334155' }}>
+              <Card className="p-5">
+                <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">Actions</h3>
+              {authChecked && !authed && (
+                <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">
                   Login as a student to enroll and track progress.
                 </p>
               )}
-              {token && !enrolled && (
-                <button
+              {authed && !enrolled && (
+                <Button
+                  variant="primary"
+                  className="mt-3 w-full bg-emerald-600 shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 focus-visible:outline-emerald-600"
                   disabled={updating}
                   onClick={enroll}
-                  style={{ width: '100%', background: '#22c55e', color: '#052e16', border: 'none', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', fontWeight: 700 }}
                 >
                   {updating ? 'Enrolling...' : 'Enroll in Course'}
-                </button>
+                </Button>
               )}
-              <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
+              <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
                 This course has no curriculum yet. Add chapters/lessons/quizzes from the admin panel to enable lesson tracking.
               </div>
               {actionMsg && (
-                <div style={{ marginTop: 12, background: '#f8fafc', border: '1px solid rgba(15,23,42,0.08)', borderRadius: 12, padding: 10, color: '#0f172a' }}>
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-100">
                   {actionMsg}
                 </div>
               )}
-            </div>
+            </Card>
           </div>
         )}
       </div>
-    </div>
   );
 }

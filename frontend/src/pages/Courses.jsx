@@ -1,6 +1,8 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { API_BASE } from '../lib/apiBase';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { apiFetch } from '../lib/apiFetch';
+import CourseSearchBox from '../components/CourseSearchBox';
+import CourseThumb from '../components/CourseThumb';
 
 function Chip({ children }) {
   return (
@@ -11,29 +13,32 @@ function Chip({ children }) {
 }
 
 export default function Courses() {
-  const token = localStorage.getItem('token');
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [items, setItems] = React.useState([]);
   const [search, setSearch] = React.useState('');
   const [category, setCategory] = React.useState('');
   const [level, setLevel] = React.useState('');
+  const [skillPath, setSkillPath] = React.useState('');
   const [page, setPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(1);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
 
-  async function load(nextPage = page) {
+  async function load({ nextPage = page, nextSearch = search, nextCategory = category, nextLevel = level, nextSkillPath = skillPath } = {}) {
     try {
       setLoading(true);
       setError('');
       const params = new URLSearchParams();
       params.set('page', String(nextPage));
       params.set('limit', '12');
-      if (search.trim()) params.set('search', search.trim());
-      if (category) params.set('category', category);
-      if (level) params.set('level', level);
+      if (String(nextSearch || '').trim()) params.set('search', String(nextSearch || '').trim());
+      if (nextCategory) params.set('category', nextCategory);
+      if (nextLevel) params.set('level', nextLevel);
+      if (nextSkillPath) params.set('skillPath', nextSkillPath);
 
-      const res = await fetch(`${API_BASE}/courses?${params.toString()}`);
+      const res = await apiFetch(`/courses?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load courses');
       setItems(Array.isArray(data.items) ? data.items : []);
@@ -47,13 +52,43 @@ export default function Courses() {
   }
 
   React.useEffect(() => {
-    load(1).catch(() => null);
+    const params = new URLSearchParams(location.search);
+    const nextSearch = params.get('search') || '';
+    const nextCategory = params.get('category') || '';
+    const nextLevel = params.get('level') || '';
+    const nextSkillPath = params.get('skillPath') || '';
+    const nextPageRaw = Number(params.get('page') || '1');
+    const nextPage = Number.isFinite(nextPageRaw) && nextPageRaw > 0 ? nextPageRaw : 1;
+
+    setSearch(nextSearch);
+    setCategory(nextCategory);
+    setLevel(nextLevel);
+    setSkillPath(nextSkillPath);
+
+    load({ nextPage, nextSearch, nextCategory, nextLevel, nextSkillPath }).catch(() => null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.search]);
+
+  function applyFilters({
+    nextSearch = search,
+    nextCategory = category,
+    nextLevel = level,
+    nextSkillPath = skillPath,
+    nextPage = 1
+  } = {}) {
+    const params = new URLSearchParams();
+    const s = String(nextSearch || '').trim();
+    if (s) params.set('search', s);
+    if (nextCategory) params.set('category', nextCategory);
+    if (nextLevel) params.set('level', nextLevel);
+    if (nextSkillPath) params.set('skillPath', nextSkillPath);
+    if (Number(nextPage) > 1) params.set('page', String(nextPage));
+    navigate(`/courses${params.toString() ? `?${params.toString()}` : ''}`);
+  }
 
   async function onSearch(e) {
     e.preventDefault();
-    await load(1);
+    applyFilters();
   }
 
   return (
@@ -64,11 +99,7 @@ export default function Courses() {
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
               Discover published courses and start learning.
             </p>
-            {!token && (
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Sign in to enroll and track progress.
-              </p>
-            )}
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Sign in to enroll and track progress.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -82,16 +113,26 @@ export default function Courses() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <form onSubmit={onSearch} className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <input
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40 md:col-span-2"
-              placeholder="Search by title, category, or description..."
+            <CourseSearchBox
+              className="md:col-span-2"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={setSearch}
+              placeholder="Search by title, category, or description..."
+              onSubmit={(q) => {
+                const next = String(q || '');
+                setSearch(next);
+                applyFilters({ nextSearch: next });
+              }}
+              onPickCourse={(id) => navigate(`/courses/${encodeURIComponent(id)}`)}
             />
             <select
               className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCategory(v);
+                applyFilters({ nextCategory: v, nextPage: 1 });
+              }}
             >
               <option value="">All categories</option>
               <option value="Web Fundamentals">Web Fundamentals</option>
@@ -104,7 +145,11 @@ export default function Courses() {
             <select
               className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
               value={level}
-              onChange={(e) => setLevel(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setLevel(v);
+                applyFilters({ nextLevel: v, nextPage: 1 });
+              }}
             >
               <option value="">All levels</option>
               <option value="Beginner">Beginner</option>
@@ -115,13 +160,14 @@ export default function Courses() {
               <button className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700">
                 Search
               </button>
-              <button
-                type="button"
-                onClick={async () => {
+            <button
+              type="button"
+              onClick={async () => {
                   setSearch('');
                   setCategory('');
                   setLevel('');
-                  await load(1);
+                  setSkillPath('');
+                  navigate('/courses');
                 }}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
@@ -131,6 +177,28 @@ export default function Courses() {
           </form>
         </div>
 
+      {skillPath ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Filtered by skill path</span>
+          <Link
+            to={`/skill-paths/${encodeURIComponent(skillPath)}`}
+            className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            View path
+          </Link>
+          <button
+            type="button"
+            className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            onClick={() => {
+              setSkillPath('');
+              applyFilters({ nextSkillPath: '', nextPage: 1 });
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      ) : null}
+
         {loading && <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">Loading courses...</div>}
         {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-200">{error}</div>}
 
@@ -139,13 +207,7 @@ export default function Courses() {
             {items.map((c) => (
               <div key={c._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="mb-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/30">
-                  {c.thumbnailUrl ? (
-                    <img src={c.thumbnailUrl} alt={c.title} className="h-36 w-full object-cover" />
-                  ) : (
-                    <div className="flex h-36 items-center justify-center bg-gradient-to-br from-indigo-100 to-slate-50 text-sm font-semibold text-slate-600 dark:from-indigo-950/30 dark:to-slate-950/30 dark:text-slate-300">
-                      SkillVerse
-                    </div>
-                  )}
+                  <CourseThumb course={c} className="h-36" />
                 </div>
                 <h3 className="text-base font-extrabold tracking-tight">{c.title}</h3>
                 <p className="mt-1 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">
@@ -181,14 +243,22 @@ export default function Courses() {
             <div className="flex gap-2">
               <button
                 disabled={page <= 1}
-                onClick={() => load(page - 1)}
+                onClick={() => {
+                  const params = new URLSearchParams(location.search);
+                  params.set('page', String(page - 1));
+                  navigate(`/courses?${params.toString()}`);
+                }}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900"
               >
                 Prev
               </button>
               <button
                 disabled={page >= totalPages}
-                onClick={() => load(page + 1)}
+                onClick={() => {
+                  const params = new URLSearchParams(location.search);
+                  params.set('page', String(page + 1));
+                  navigate(`/courses?${params.toString()}`);
+                }}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900"
               >
                 Next

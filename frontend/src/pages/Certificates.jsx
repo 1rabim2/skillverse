@@ -1,32 +1,33 @@
 import React from 'react';
+import { apiFetch } from '../lib/apiFetch';
 import { API_BASE } from '../lib/apiBase';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
 
 export default function Certificates() {
-  const token = localStorage.getItem('token');
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const [blocked, setBlocked] = React.useState(false);
 
   React.useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     let mounted = true;
     async function load() {
       try {
         setLoading(true);
         setError('');
-        const res = await fetch(`${API_BASE}/user/me/certificates`, { headers: { Authorization: `Bearer ${token}` } });
+        setBlocked(false);
+        const res = await apiFetch('/user/me/certificates');
         const data = await res.json();
         if (!res.ok) {
           const msg = data?.error || 'Failed to load certificates';
           if (res.status === 404 && msg.toLowerCase().includes('user not found')) {
-            localStorage.removeItem('token');
-            throw new Error('Session expired (user no longer exists). Please login again.');
+            throw new Error('Session expired. Please login again.');
           }
-          if (res.status === 401 || res.status === 403) localStorage.removeItem('token');
+          if (res.status === 401 || res.status === 403) {
+            if (mounted) setBlocked(true);
+            return;
+          }
           throw new Error(msg);
         }
         if (mounted) setItems(Array.isArray(data.items) ? data.items : []);
@@ -41,71 +42,104 @@ export default function Certificates() {
     return () => {
       mounted = false;
     };
-  }, [token]);
+  }, []);
 
-  if (!token) {
+  if (blocked) {
     return (
-      <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', padding: 24 }}>
-        <div style={{ maxWidth: 520, background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 8px 24px rgba(15,23,42,0.08)' }}>
-          <h2 style={{ marginTop: 0 }}>My Certificates</h2>
-          <p>You are not logged in as a student. Please login first.</p>
-          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-            <button className="sv-cta" onClick={() => { window.location.href = '/login'; }}>
-              Go to Student Login
-            </button>
-            <button
-              style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}
-              onClick={() => { window.location.href = '/dashboard'; }}
-            >
-              Back to Dashboard
-            </button>
+      <div className="grid min-h-[70vh] place-items-center p-4">
+        <Card className="w-full max-w-xl p-6">
+          <div className="text-lg font-extrabold tracking-tight">My Certificates</div>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+            You are not logged in as a student. Sign in to view your certificates.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button variant="primary" onClick={() => (window.location.href = '/login')}>
+              Go to student login
+            </Button>
+            <Button variant="outline" onClick={() => (window.location.href = '/dashboard')}>
+              Back to dashboard
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
     );
   }
 
-  if (loading) return <div style={{ padding: 24 }}>Loading certificates...</div>;
-  if (error) return <div style={{ padding: 24 }}>Could not load certificates: {error}</div>;
+  if (loading) {
+    return (
+      <Card className="p-5">
+        <div className="text-sm text-slate-600 dark:text-slate-300">Loading certificates...</div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="p-5">
+        <div className="text-sm font-semibold text-slate-900 dark:text-white">Could not load certificates</div>
+        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{error}</div>
+      </Card>
+    );
+  }
 
   return (
-    <div className="sv-section" style={{ overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+    <Card className="p-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 style={{ marginTop: 0, marginBottom: 6 }}>My Certificates</h2>
-          <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>Certificates issued after completing courses.</p>
+          <div className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">My Certificates</div>
+          <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Certificates issued after completing courses.
+          </div>
         </div>
-        <button className="sv-cta" onClick={() => (window.location.href = '/dashboard')}>Back to Dashboard</button>
+        <Button variant="outline" onClick={() => (window.location.href = '/dashboard')}>
+          Back to dashboard
+        </Button>
       </div>
 
-      <div style={{ marginTop: 14, borderRadius: 12, border: '1px solid rgba(15,23,42,0.08)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: 'rgba(15,23,42,0.03)' }}>
-              <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid rgba(15,23,42,0.08)' }}>Certificate ID</th>
-              <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid rgba(15,23,42,0.08)' }}>Course</th>
-              <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid rgba(15,23,42,0.08)' }}>Score</th>
-              <th style={{ textAlign: 'left', padding: 12, borderBottom: '1px solid rgba(15,23,42,0.08)' }}>Issued</th>
+      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+        <table className="w-full border-collapse">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-950/40 dark:text-slate-300">
+            <tr>
+              <th className="px-4 py-3">Certificate ID</th>
+              <th className="px-4 py-3">Course</th>
+              <th className="px-4 py-3">Score</th>
+              <th className="px-4 py-3">Issued</th>
+              <th className="px-4 py-3 text-right">Download</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             {items.map((c) => (
-              <tr key={c._id || c.certificateId} style={{ borderBottom: '1px solid rgba(15,23,42,0.06)' }}>
-                <td style={{ padding: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}>
-                  {c.certificateId}
-                </td>
-                <td style={{ padding: 12 }}>{c.course?.title || 'Course'}</td>
-                <td style={{ padding: 12, color: '#334155' }}>
+              <tr key={c._id || c.certificateId} className="text-sm">
+                <td className="px-4 py-3 font-mono text-xs text-slate-700 dark:text-slate-200">{c.certificateId}</td>
+                <td className="px-4 py-3 text-slate-800 dark:text-slate-100">{c.course?.title || 'Course'}</td>
+                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
                   {typeof c.scorePercent === 'number'
                     ? `${c.scorePercent}%${typeof c.passPercent === 'number' ? ` (pass ${c.passPercent}%)` : ''}`
                     : '-'}
                 </td>
-                <td style={{ padding: 12 }}>{c.issuedAt ? new Date(c.issuedAt).toLocaleString() : '-'}</td>
+                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                  {c.issuedAt ? new Date(c.issuedAt).toLocaleString() : '-'}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {c.certificateId ? (
+                    <Button
+                      as="a"
+                      variant="outline"
+                      href={`${API_BASE}/user/me/certificates/${encodeURIComponent(String(c.certificateId))}/download`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      PDF
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-slate-500">-</span>
+                  )}
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={4} style={{ padding: 12, color: '#64748b' }}>
+                <td colSpan={5} className="px-4 py-6 text-sm text-slate-600 dark:text-slate-300">
                   No certificates yet. Complete a course to generate one.
                 </td>
               </tr>
@@ -113,6 +147,6 @@ export default function Certificates() {
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   );
 }
