@@ -12,13 +12,17 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 if (!process.env.JWT_SECRET) {
   console.error('Missing JWT_SECRET. Create backend/.env (see backend/.env.example) and set JWT_SECRET to a strong random value.');
-  process.exit(1);
+  // When running as a module (e.g. in tests), throw instead of exiting the whole test process.
+  if (require.main === module) process.exit(1);
+  throw new Error('Missing JWT_SECRET');
 }
 
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const userRoutes = require('./routes/user');
 const communityRoutes = require('./routes/community');
+const coursesRoutes = require('./routes/courses');
+const instructorRoutes = require('./routes/instructor');
 const uploadsAdminRoutes = require('./routes/uploadsAdmin');
 const uploadsUserRoutes = require('./routes/uploadsUser');
 const paymentsRoutes = require('./routes/payments');
@@ -139,6 +143,9 @@ app.use('/api/user/uploads', authMiddleware, uploadsUserRoutes);
 app.use('/api/user', authMiddleware, userRoutes);
 app.use('/api/payments', authMiddleware, paymentsRoutes);
 app.use('/api/community', communityRoutes);
+// Extra course actions (instructor/admin) live in a router to avoid growing index.js further.
+app.use('/api/courses', coursesRoutes);
+app.use('/api/instructor', instructorRoutes);
 
 app.get('/api/courses', async (req, res) => {
   try {
@@ -163,6 +170,15 @@ app.get('/api/courses', async (req, res) => {
     // Treat older seeded data (before status existed) as published for demos.
     filter.$and = filter.$and || [];
     filter.$and.push({ $or: [{ status: 'published' }, { status: { $exists: false } }] });
+    // Do not expose unapproved instructor courses publicly.
+    // Allow older seeded data that predates the approval fields.
+    filter.$and.push({
+      $or: [
+        { createdBy: { $exists: true, $ne: null } },
+        { isApproved: true },
+        { isApproved: { $exists: false } }
+      ]
+    });
     if (category) filter.category = category;
     if (level) filter.level = level;
     if (skillPath && mongoose.Types.ObjectId.isValid(skillPath)) filter.skillPath = skillPath;
@@ -193,7 +209,21 @@ app.get('/api/courses/:id', optionalAuth, async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid id' });
     const course = await Course.findById(id).populate('skillPath', 'title description');
     if (!course) return res.status(404).json({ error: 'Course not found' });
-    if (course.status && course.status !== 'published') return res.status(404).json({ error: 'Course not found' });
+
+    const role = String(req.user?.role || '').toLowerCase();
+    const isAdmin = role === 'admin';
+    const isOwningInstructor = role === 'instructor' && String(course.instructorId || '') === String(req.user?.id || '');
+
+    // Draft courses are visible only to admins and the owning instructor.
+    if (course.status && course.status !== 'published' && !isAdmin && !isOwningInstructor) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    // Hide unapproved courses from public, but allow the owning instructor or admins to preview.
+    if (course.isApproved === false && !course.createdBy) {
+      if (!isAdmin && !isOwningInstructor) return res.status(404).json({ error: 'Course not found' });
+    }
+    const revealQuizAnswers = isAdmin || isOwningInstructor;
 
     const raw = course.toObject({ virtuals: true });
     const chapters = Array.isArray(raw.chapters) ? raw.chapters : [];
@@ -203,6 +233,7 @@ app.get('/api/courses/:id', optionalAuth, async (req, res) => {
         ? ch.lessons.map((ls) => {
             const quiz = ls?.quiz || null;
             if (!quiz || !Array.isArray(quiz.questions) || quiz.questions.length === 0) return ls;
+            if (revealQuizAnswers) return ls;
             return {
               ...ls,
               quiz: {
@@ -222,7 +253,9 @@ app.get('/api/courses/:id', optionalAuth, async (req, res) => {
     const payload = { ...raw, chapters: safeChapters };
 
     let allowVideos = false;
-    if (req.user?.id) {
+    if (isAdmin || isOwningInstructor) {
+      allowVideos = true;
+    } else if (req.user?.id) {
       const u = await User.findById(req.user.id).select('subscription isActive isVerified role');
       if (u && u.isActive && u.isVerified && u.role === 'student' && isSubscriptionActive(u)) allowVideos = true;
     }
@@ -238,12 +271,16 @@ app.get('/api/skill-paths', async (req, res) => {
   try {
     const items = await SkillPath.find()
       .sort({ createdAt: -1 })
-      .populate('courses', 'title category level status thumbnailUrl skillPath');
+      .populate('courses', 'title category level status thumbnailUrl skillPath isApproved createdBy');
 
     const safe = (items || []).map((path) => {
       const raw = path.toObject({ virtuals: true });
       const courses = Array.isArray(raw.courses) ? raw.courses : [];
-      const publishedCourses = courses.filter((c) => !c?.status || c.status === 'published');
+      const publishedCourses = courses.filter((c) => {
+        const isPublished = !c?.status || c.status === 'published';
+        const isApproved = c?.createdBy || c?.isApproved !== false;
+        return isPublished && isApproved;
+      });
       return { ...raw, courses: publishedCourses };
     });
 
@@ -258,12 +295,16 @@ app.get('/api/skill-paths/:id', async (req, res) => {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid id' });
 
-    const item = await SkillPath.findById(id).populate('courses', 'title category level status thumbnailUrl skillPath');
+    const item = await SkillPath.findById(id).populate('courses', 'title category level status thumbnailUrl skillPath isApproved createdBy');
     if (!item) return res.status(404).json({ error: 'Skill path not found' });
 
     const raw = item.toObject({ virtuals: true });
     const courses = Array.isArray(raw.courses) ? raw.courses : [];
-    const publishedCourses = courses.filter((c) => !c?.status || c.status === 'published');
+    const publishedCourses = courses.filter((c) => {
+      const isPublished = !c?.status || c.status === 'published';
+      const isApproved = c?.createdBy || c?.isApproved !== false;
+      return isPublished && isApproved;
+    });
 
     res.json({ ...raw, courses: publishedCourses });
   } catch (err) {
@@ -274,9 +315,6 @@ app.get('/api/skill-paths/:id', async (req, res) => {
 app.get('/api/protected', authMiddleware, (req, res) => {
   res.json({ message: 'This is protected data', user: req.user });
 });
-
-const PORT = process.env.PORT || 4000;
-const MONGO = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/skillverse';
 
 async function ensureDefaultAdmin() {
   const email = process.env.ADMIN_EMAIL || 'admin@skillverse.com';
@@ -289,6 +327,9 @@ async function ensureDefaultAdmin() {
 }
 
 async function startServer() {
+  const PORT = process.env.PORT || 4000;
+  const MONGO = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/skillverse';
+
   const disableEmbeddedMongo = ['1', 'true', 'yes', 'y', 'on'].includes(
     String(process.env.DISABLE_EMBEDDED_MONGO || '').trim().toLowerCase()
   );
@@ -367,7 +408,8 @@ async function startServer() {
         if (disableEmbeddedMongo) {
           console.error('Embedded MongoDB is disabled (DISABLE_EMBEDDED_MONGO=true).');
           console.error('Start a local MongoDB on 127.0.0.1:27017 or set MONGO_URI to a reachable MongoDB instance.');
-          process.exit(1);
+          if (require.main === module) process.exit(1);
+          throw new Error('Embedded MongoDB is disabled and local MongoDB is unreachable');
         }
 
         console.warn('Falling back to embedded MongoDB for local development');
@@ -376,14 +418,16 @@ async function startServer() {
         } catch (memErr) {
           console.error('Failed to start embedded MongoDB:', memErr.message);
           console.error('Tip: set DISABLE_EMBEDDED_MONGO=true and use a local MongoDB (127.0.0.1:27017) or Atlas.');
-          process.exit(1);
+          if (require.main === module) process.exit(1);
+          throw memErr;
         }
       }
     } else {
       if (disableEmbeddedMongo) {
         console.error('Embedded MongoDB is disabled (DISABLE_EMBEDDED_MONGO=true).');
         console.error('Start a local MongoDB on 127.0.0.1:27017 or set MONGO_URI to a reachable MongoDB instance.');
-        process.exit(1);
+        if (require.main === module) process.exit(1);
+        throw new Error('Embedded MongoDB is disabled and MongoDB is unreachable');
       }
 
       console.warn('Falling back to embedded MongoDB for local development');
@@ -392,13 +436,21 @@ async function startServer() {
       } catch (memErr) {
         console.error('Failed to start embedded MongoDB:', memErr.message);
         console.error('Tip: set DISABLE_EMBEDDED_MONGO=true and use a local MongoDB (127.0.0.1:27017) or Atlas.');
-        process.exit(1);
+        if (require.main === module) process.exit(1);
+        throw memErr;
       }
     }
   }
 
   await ensureDefaultAdmin();
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  const server = await new Promise((resolve) => {
+    const s = app.listen(PORT, () => {
+      const addr = s.address();
+      const actualPort = typeof addr === 'object' && addr ? addr.port : PORT;
+      console.log(`Server running on port ${actualPort}`);
+      resolve(s);
+    });
+  });
 
   // Subscription reminders (email + in-app notifications)
   const remindersEnabled = !['0', 'false', 'no', 'off'].includes(String(process.env.SUBSCRIPTION_REMINDERS_ENABLED || '').trim().toLowerCase());
@@ -481,6 +533,24 @@ async function startServer() {
     setTimeout(() => runReminderSweep().catch(() => null), 15000);
     setInterval(() => runReminderSweep().catch(() => null), intervalHours * 60 * 60 * 1000);
   }
+
+  async function stop() {
+    await new Promise((resolve) => server.close(resolve));
+    try {
+      await mongoose.disconnect();
+    } catch {
+      // ignore
+    }
+  }
+
+  return { app, server, stop };
 }
 
-startServer();
+if (require.main === module) {
+  startServer().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { app, startServer };

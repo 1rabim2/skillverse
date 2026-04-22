@@ -19,6 +19,8 @@ import MyProjects from './pages/MyProjects';
 import Subscribe from './pages/Subscribe';
 import SubscribeReturn from './pages/SubscribeReturn';
 import StudentLayout from './components/StudentLayout';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import InstructorLayout from './components/instructor/InstructorLayout';
 import ProtectedAdminRoute from './components/admin/ProtectedAdminRoute';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminLogin from './pages/admin/AdminLogin';
@@ -31,6 +33,13 @@ import AdminCommunity from './pages/admin/AdminCommunity';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminProjects from './pages/admin/AdminProjects';
 import AdminSubscriptions from './pages/admin/AdminSubscriptions';
+import InstructorDashboard from './pages/instructor/InstructorDashboard';
+import InstructorCourses from './pages/instructor/InstructorCourses';
+import InstructorCreateCourse from './pages/instructor/InstructorCreateCourse';
+import InstructorEditCourse from './pages/instructor/InstructorEditCourse';
+import InstructorStudents from './pages/instructor/InstructorStudents';
+import InstructorLibrary from './pages/instructor/InstructorLibrary';
+import InstructorProjects from './pages/instructor/InstructorProjects';
 
 export default function App() {
   return (
@@ -44,19 +53,86 @@ export default function App() {
         <Route path="/verify" element={<Verify />} />
 
         <Route element={<StudentLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/skill-paths" element={<SkillPaths />} />
           <Route path="/skill-paths/:id" element={<SkillPathDetail />} />
           <Route path="/courses" element={<Courses />} />
           <Route path="/courses/:id" element={<CourseDetail />} />
           <Route path="/community" element={<Community />} />
-          <Route path="/portfolio" element={<Portfolio />} />
-          <Route path="/projects" element={<MyProjects />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/certificates" element={<Certificates />} />
-          <Route path="/subscribe" element={<Subscribe />} />
-          <Route path="/subscribe/return" element={<SubscribeReturn />} />
+          <Route
+            path="/portfolio"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <Portfolio />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <MyProjects />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/certificates"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <Certificates />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscribe"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <Subscribe />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscribe/return"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <SubscribeReturn />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/leaderboard" element={<Leaderboard />} />
+        </Route>
+
+        <Route
+          path="/instructor"
+          element={
+            <ProtectedRoute allow={['instructor']}>
+              <InstructorLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/instructor/dashboard" replace />} />
+          <Route path="dashboard" element={<InstructorDashboard />} />
+          <Route path="courses" element={<InstructorCourses />} />
+          <Route path="courses/new" element={<InstructorCreateCourse />} />
+          <Route path="courses/:id" element={<InstructorEditCourse />} />
+          <Route path="library" element={<InstructorLibrary />} />
+          <Route path="students" element={<InstructorStudents />} />
+          <Route path="projects" element={<InstructorProjects />} />
         </Route>
 
         <Route path="/admin/login" element={<AdminLogin />} />

@@ -4,10 +4,12 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const Admin = require('../models/Admin');
 const { notifyAllAdmins } = require('../utils/notifications');
 const { OAuth2Client } = require('google-auth-library');
 const rateLimit = require('express-rate-limit');
 const { validatePassword, validateEmail } = require('../utils/validation');
+const authMiddleware = require('../middleware/auth');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
@@ -49,6 +51,16 @@ function setAuthCookie(res, token) {
   });
 }
 
+// Backwards compatibility for older admin UI which used `adminToken` cookie.
+function setAdminCompatCookie(res, token) {
+  res.cookie('adminToken', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
+}
+
 // Helper to clear auth cookie
 function clearAuthCookie(res) {
   res.clearCookie('authToken', {
@@ -58,10 +70,18 @@ function clearAuthCookie(res) {
   });
 }
 
+function clearAdminCompatCookie(res) {
+  res.clearCookie('adminToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+}
+
 // Register
 router.post('/register', authLimiter, async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
     
     if (!normalizedEmail || !password) {
@@ -85,14 +105,20 @@ router.post('/register', authLimiter, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hash = await bcrypt.hash(password, salt);
 
+    const requestedRole = String(role || 'student').trim().toLowerCase();
+    if (!['student', 'instructor'].includes(requestedRole)) {
+      return res.status(400).json({ error: 'role must be student or instructor' });
+    }
+
     // Don't auto-verify - require email verification
-    const verificationToken = crypto.randomBytes(20).toString('hex');
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
     const user = new User({ 
       name, 
       email: normalizedEmail, 
       password: hash, 
+      role: requestedRole,
       isVerified: false,
-      verificationToken
+      verificationToken: verificationCode
     });
     await user.save();
 
@@ -106,12 +132,11 @@ router.post('/register', authLimiter, async (req, res) => {
 
     // Send verification email
     const { sendEmail } = require('../utils/email');
-    const verifyLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${verificationToken}`;
     await sendEmail({
       to: user.email,
       subject: 'Verify your Skillverse account',
-      text: `Please verify your account by visiting: ${verifyLink}`,
-      html: `<p>Please verify your account by clicking <a href="${verifyLink}">this link</a>.</p>`
+      text: `Your verification code is: ${verificationCode}`,
+      html: `<p>Your verification code is: <strong>${verificationCode}</strong></p>`
     }).catch(() => null);
 
     // Don't log user in automatically - require email verification first
@@ -131,6 +156,19 @@ router.post('/login', authLimiter, async (req, res) => {
     const { email, password } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
     if (!normalizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
+
+    // Unified login for users and admins (admins are created manually).
+    const admin = await Admin.findOne(emailFilter(normalizedEmail));
+    if (admin) {
+      if (!admin.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+      const matchAdmin = await bcrypt.compare(password, admin.password);
+      if (matchAdmin) {
+        const token = jwt.sign({ id: admin._id, email: admin.email, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+        setAuthCookie(res, token);
+        setAdminCompatCookie(res, token);
+        return res.json({ token, user: { id: admin._id, email: admin.email, name: admin.name, role: 'admin' } });
+      }
+    }
 
     const user = await User.findOne(emailFilter(normalizedEmail));
     // Dev debug logs to help trace login failures locally
@@ -166,8 +204,13 @@ router.post('/google', authLimiter, async (req, res) => {
   try {
     if (!googleClient) return res.status(500).json({ error: 'Google auth is not configured (missing GOOGLE_CLIENT_ID)' });
 
-    const { credential } = req.body || {};
+    const { credential, role } = req.body || {};
     if (!credential) return res.status(400).json({ error: 'credential required' });
+
+    const requestedRole = String(role || 'student').trim().toLowerCase();
+    if (!['student', 'instructor'].includes(requestedRole)) {
+      return res.status(400).json({ error: 'role must be student or instructor' });
+    }
 
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
@@ -198,15 +241,16 @@ router.post('/google', authLimiter, async (req, res) => {
       const randomPassword = crypto.randomBytes(32).toString('hex');
       const salt = await bcrypt.genSalt(10);
       const hash = await bcrypt.hash(randomPassword, salt);
-      const verificationToken = crypto.randomBytes(20).toString('hex');
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
       user = new User({
         name,
         email,
         password: hash,
         isVerified: false, // SECURITY FIX: Require email verification even with Google
+        role: requestedRole,
         googleSub,
-        verificationToken
+        verificationToken: verificationCode
       });
 
       await user.save();
@@ -222,12 +266,11 @@ router.post('/google', authLimiter, async (req, res) => {
 
       // Send verification email for Google OAuth users
       const { sendEmail } = require('../utils/email');
-      const verifyLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${verificationToken}`;
       await sendEmail({
         to: user.email,
         subject: 'Verify your Skillverse account',
-        text: `Please verify your account by visiting: ${verifyLink}`,
-        html: `<p>Please verify your account by clicking <a href="${verifyLink}">this link</a>.</p>`
+        text: `Your verification code is: ${verificationCode}`,
+        html: `<p>Your verification code is: <strong>${verificationCode}</strong></p>`
       }).catch(() => null);
 
       return res.status(201).json({
@@ -262,7 +305,30 @@ router.post('/google', authLimiter, async (req, res) => {
   }
 });
 
-// Verify email
+// Verify email with code
+router.post('/verify', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail || !code) return res.status(400).json({ error: 'Email and code required' });
+
+    const user = await User.findOne(emailFilter(normalizedEmail));
+    if (!user) return res.status(400).json({ error: 'User not found' });
+    if (user.isVerified) return res.status(400).json({ error: 'Account already verified' });
+    if (user.verificationToken !== code) return res.status(400).json({ error: 'Invalid code' });
+
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    await user.save();
+
+    res.json({ message: 'Email verified. You can now log in.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Verify email with token (for backward compatibility)
 router.get('/verify', async (req, res) => {
   try {
     const { token } = req.query;
@@ -270,6 +336,7 @@ router.get('/verify', async (req, res) => {
 
     const user = await User.findOne({ verificationToken: token });
     if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
+    if (user.isVerified) return res.status(400).json({ error: 'Account already verified' });
 
     user.isVerified = true;
     user.verificationToken = undefined;
@@ -293,16 +360,15 @@ router.post('/resend-verification', authLimiter, async (req, res) => {
     // Always return a generic message to avoid revealing which emails exist
     if (!user || user.isVerified) return res.status(200).json({ message: 'If that email exists and is unverified, a verification link was sent' });
 
-    if (!user.verificationToken) user.verificationToken = require('crypto').randomBytes(20).toString('hex');
+    if (!user.verificationToken) user.verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
     await user.save();
 
     const { sendEmail } = require('../utils/email');
-    const verifyLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${user.verificationToken}`;
     await sendEmail({
       to: user.email,
       subject: 'Verify your Skillverse account',
-      text: `Please verify your account by visiting: ${verifyLink}`,
-      html: `<p>Please verify your account by clicking <a href="${verifyLink}">this link</a>.</p>`
+      text: `Your verification code is: ${user.verificationToken}`,
+      html: `<p>Your verification code is: <strong>${user.verificationToken}</strong></p>`
     });
 
     return res.status(200).json({ message: 'If that email exists and is unverified, a verification link was sent' });
@@ -327,18 +393,17 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
 
     // If the account is not verified, send verification link instead of reset link
     if (!user.isVerified) {
-      if (!user.verificationToken) user.verificationToken = require('crypto').randomBytes(20).toString('hex');
+      if (!user.verificationToken) user.verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
       await user.save();
-      const verifyLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify?token=${user.verificationToken}`;
       await sendEmail({
         to: user.email,
         subject: 'Verify your Skillverse account',
-        text: `Please verify your account by visiting: ${verifyLink}`,
-        html: `<p>Please verify your account by clicking <a href="${verifyLink}">this link</a>.</p>`
+        text: `Your verification code is: ${user.verificationToken}`,
+        html: `<p>Your verification code is: <strong>${user.verificationToken}</strong></p>`
       });
 
-      const resp = { message: 'If that email exists and is unverified, a verification link was sent' };
-      if (process.env.NODE_ENV !== 'production') resp.verifyLink = verifyLink;
+      const resp = { message: 'If that email exists and is unverified, a verification code was sent' };
+      if (process.env.NODE_ENV !== 'production') resp.verificationCode = user.verificationToken;
       return res.status(200).json(resp);
     }
 
@@ -393,9 +458,31 @@ router.post('/reset-password', authLimiter, async (req, res) => {
   }
 });
 
+// Authenticated identity (student/instructor/admin)
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user?.role || '').toLowerCase();
+    const id = req.user?.id;
+    if (!id) return res.status(401).json({ error: 'Unauthorized' });
+
+    if (role === 'admin') {
+      const admin = await Admin.findById(id).select('-password');
+      if (!admin || !admin.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+      return res.json({ user: { id: admin._id, email: admin.email, name: admin.name, role: 'admin' } });
+    }
+
+    const user = await User.findById(id).select('-password');
+    if (!user || !user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    return res.json({ user: { id: user._id, email: user.email, name: user.name, role: user.role || 'student' } });
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Logout
 router.post('/logout', (req, res) => {
   clearAuthCookie(res);
+  clearAdminCompatCookie(res);
   res.json({ message: 'Logged out successfully' });
 });
 

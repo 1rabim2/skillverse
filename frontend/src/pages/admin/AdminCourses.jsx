@@ -222,17 +222,20 @@ function PreviewModal({ open, onClose, form, lessons, skillPathTitle }) {
 export default function AdminCourses() {
   const [items, setItems] = React.useState([]);
   const [skillPaths, setSkillPaths] = React.useState([]);
+  const [instructors, setInstructors] = React.useState([]);
 
   const [search, setSearch] = React.useState('');
   const [filterCategory, setFilterCategory] = React.useState('');
   const [filterLevel, setFilterLevel] = React.useState('');
   const [filterStatus, setFilterStatus] = React.useState('');
+  const [filterApproval, setFilterApproval] = React.useState(''); // '' | 'pending' | 'requested'
 
   const [page, setPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(1);
 
   const [form, setForm] = React.useState(initialForm);
   const [editingId, setEditingId] = React.useState('');
+  const [ownerInstructorId, setOwnerInstructorId] = React.useState('');
 
   const [dragActive, setDragActive] = React.useState(false);
   const [lessons, setLessons] = React.useState([]);
@@ -255,13 +258,17 @@ export default function AdminCourses() {
   }, [menuOpenId]);
 
   async function load() {
+    const pending = filterApproval === 'pending' || filterApproval === 'requested';
+    const requestedOnly = filterApproval === 'requested';
     const res = await adminApi.get('/courses', {
       params: {
         page,
         search,
         category: filterCategory || undefined,
         level: filterLevel || undefined,
-        status: filterStatus || undefined
+        status: filterStatus || undefined,
+        pending: pending ? 1 : undefined,
+        requestedOnly: requestedOnly ? 1 : undefined
       }
     });
     setItems(res.data.items || []);
@@ -277,16 +284,26 @@ export default function AdminCourses() {
     adminApi.get('/skill-paths').then((res) => setSkillPaths(res.data || [])).catch(() => null);
   }, []);
 
+  React.useEffect(() => {
+    // Load instructors for ownership transfer dropdown
+    adminApi
+      .get('/users', { params: { page: 1, limit: 200, role: 'instructor' } })
+      .then((res) => setInstructors(res.data?.items || []))
+      .catch(() => null);
+  }, []);
+
   function resetForm() {
     setForm(initialForm);
     setLessons([]);
     setEditingId('');
+    setOwnerInstructorId('');
     setDragActive(false);
     setDragLessonId('');
   }
 
   function edit(item) {
     setEditingId(item._id);
+    setOwnerInstructorId(item.instructorId?._id || '');
     setForm({
       title: item.title || '',
       category: item.category || 'General',
@@ -297,6 +314,22 @@ export default function AdminCourses() {
       status: item.status || 'draft'
     });
     setLessons(normalizeLessonsFromCourse(item));
+  }
+
+  async function transferToInstructor() {
+    if (!editingId) return;
+    if (!ownerInstructorId) return alert('Select an instructor first.');
+    try {
+      setRowBusyId(editingId);
+      await adminApi.patch(`/courses/${editingId}/transfer-to-instructor`, { instructorId: ownerInstructorId });
+      await load();
+      alert('Course transferred to instructor. It will appear on the instructor dashboard.');
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to transfer course';
+      alert(msg);
+    } finally {
+      setRowBusyId('');
+    }
   }
 
   async function remove(id) {
@@ -442,6 +475,11 @@ export default function AdminCourses() {
   async function save(e) {
     e.preventDefault();
 
+    if (!editingId) {
+      alert('Course creation is disabled. Select a course from the list and edit/publish it instead.');
+      return;
+    }
+
     const title = safeString(form.title).trim();
     if (!title) return alert('Title is required');
     if (lessons.length > 0 && lessons.some((ls) => safeString(ls.title).trim() === '')) {
@@ -460,8 +498,7 @@ export default function AdminCourses() {
     };
 
     try {
-      if (editingId) await adminApi.put(`/courses/${editingId}`, payload);
-      else await adminApi.post('/courses', payload);
+      await adminApi.put(`/courses/${editingId}`, payload);
       resetForm();
       await load();
     } catch (err) {
@@ -517,20 +554,58 @@ export default function AdminCourses() {
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Course Management</p>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{editingId ? 'Edit course' : 'Add course'}</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{editingId ? 'Edit course' : 'Approvals'}</h3>
               </div>
               {editingId && (
                 <button type="button" onClick={resetForm} className="rounded-xl border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">
-                  New course
+                  Clear selection
                 </button>
               )}
             </div>
 
-            <form onSubmit={save} className="space-y-5">
-              <div>
-                <p className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-200">Course Info</p>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="md:col-span-2">
+            {!editingId ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200">
+                Course creation is disabled. Instructors create course drafts; admins review and publish them. Select a course from the list to the right to start reviewing.
+              </div>
+            ) : (
+              <form onSubmit={save} className="space-y-5">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="md:col-span-2">
+                      <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Instructor Owner</label>
+                      <select
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
+                        value={ownerInstructorId}
+                        onChange={(e) => setOwnerInstructorId(e.target.value)}
+                      >
+                        <option value="">No instructor</option>
+                        {instructors.map((u) => (
+                          <option key={u._id} value={u._id}>
+                            {u.email}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Transfer makes this course show under the instructor dashboard (recommended for “instructor-posted” courses).
+                      </div>
+                    </div>
+                    <div className="flex items-end justify-end">
+                      <button
+                        type="button"
+                        onClick={transferToInstructor}
+                        disabled={rowBusyId === editingId || !ownerInstructorId}
+                        className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+                      >
+                        {rowBusyId === editingId ? 'Transferring…' : 'Transfer to Instructor'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-200">Course Info</p>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="md:col-span-2">
                     <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Title</label>
                     <input
                       className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
@@ -967,10 +1042,11 @@ export default function AdminCourses() {
                   type="submit"
                   className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700"
                 >
-                  {editingId ? 'Update Course' : 'Create Course'}
+                  Update Course
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
         <div className="space-y-4 xl:col-span-2">
@@ -1020,6 +1096,15 @@ export default function AdminCourses() {
                   <option value="draft">draft</option>
                   <option value="published">published</option>
                 </select>
+                <select
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  value={filterApproval}
+                  onChange={(e) => setFilterApproval(e.target.value)}
+                >
+                  <option value="">All approvals</option>
+                  <option value="pending">Pending approvals</option>
+                  <option value="requested">Requested only</option>
+                </select>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1033,6 +1118,7 @@ export default function AdminCourses() {
                     setFilterCategory('');
                     setFilterLevel('');
                     setFilterStatus('');
+                    setFilterApproval('');
                     setPage(1);
                     await load();
                   }}
@@ -1074,9 +1160,28 @@ export default function AdminCourses() {
                         </div>
                       </td>
                       <td className="px-2 py-3 font-semibold text-slate-900 dark:text-slate-100">
-                        <div className="truncate" title={item.title}>
-                          {item.title}
+                        <div className="flex items-center gap-2">
+                          <div className="truncate" title={item.title}>
+                            {item.title}
+                          </div>
+                          {!item.createdBy && item.isApproved === false ? (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                              Pending
+                            </span>
+                          ) : null}
                         </div>
+                        {item.instructorId?.email ? (
+                          <div className="mt-1 truncate text-xs font-normal text-slate-500 dark:text-slate-400" title={item.instructorId.email}>
+                            Instructor: {item.instructorId.email}
+                          </div>
+                        ) : item.createdBy ? (
+                          <div className="mt-1 text-xs font-normal text-slate-500 dark:text-slate-400">Admin course</div>
+                        ) : null}
+                        {!item.createdBy && item.approvalRequestedAt ? (
+                          <div className="mt-1 text-xs font-normal text-slate-500 dark:text-slate-400">
+                            Requested: {new Date(item.approvalRequestedAt).toLocaleString()}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 lg:table-cell">
                         <div className="truncate" title={item.category || ''}>

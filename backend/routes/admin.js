@@ -69,11 +69,24 @@ function setAdminAuthCookie(res, token) {
     sameSite: 'strict',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   });
+
+  // Unified auth cookie (shared login across roles)
+  res.cookie('authToken', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  });
 }
 
 // Helper to clear admin auth cookie
 function clearAdminAuthCookie(res) {
   res.clearCookie('adminToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+  res.clearCookie('authToken', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict'
@@ -268,6 +281,8 @@ router.get('/courses', adminAuth, async (req, res) => {
     const level = (req.query.level || '').trim();
     const category = (req.query.category || '').trim();
     const status = (req.query.status || '').trim();
+    const pending = String(req.query.pending || '').trim();
+    const requestedOnly = String(req.query.requestedOnly || '').trim();
 
     const filter = {};
     if (search) {
@@ -280,8 +295,21 @@ router.get('/courses', adminAuth, async (req, res) => {
     if (category) filter.category = category;
     if (status) filter.status = status;
 
+    if (pending === '1' || pending.toLowerCase() === 'true') {
+      filter.isApproved = false;
+      filter.createdBy = null;
+      if (requestedOnly === '1' || requestedOnly.toLowerCase() === 'true') {
+        filter.approvalRequestedAt = { $ne: null };
+      }
+    }
+
     const [items, total] = await Promise.all([
-      Course.find(filter).populate('skillPath', 'title').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+      Course.find(filter)
+        .populate('skillPath', 'title')
+        .populate('instructorId', 'name email')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
       Course.countDocuments(filter)
     ]);
     res.json({ items, page, totalPages: Math.max(1, Math.ceil(total / limit)), total });
@@ -292,14 +320,24 @@ router.get('/courses', adminAuth, async (req, res) => {
 
 router.post('/courses', adminAuth, async (req, res) => {
   try {
+    const allowAdminCourseCreate = ['1', 'true', 'yes', 'on'].includes(String(process.env.ALLOW_ADMIN_COURSE_CREATE || '').trim().toLowerCase());
+    if (!allowAdminCourseCreate) {
+      return res.status(403).json({ error: 'Admin course creation is disabled. Instructors create drafts; admins approve/publish.' });
+    }
+
     const { title, category, description, level, status, videoUrl, resourceLink, skillPath, thumbnailUrl, chapters } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
+    const nextStatus = status === 'published' ? 'published' : 'draft';
     const created = await Course.create({
       title,
       category,
       description,
       level,
-      status: status === 'published' ? 'published' : 'draft',
+      status: nextStatus,
+      isApproved: true,
+      approvedAt: nextStatus === 'published' ? new Date() : null,
+      approvedBy: nextStatus === 'published' ? req.admin._id : null,
+      approvalRequestedAt: null,
       videoUrl,
       resourceLink,
       thumbnailUrl,
@@ -347,7 +385,7 @@ router.get('/courses/:id', adminAuth, async (req, res) => {
 router.put('/courses/:id', adminAuth, async (req, res) => {
   try {
     if (!objectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
-    const before = await Course.findById(req.params.id).select('title status');
+    const before = await Course.findById(req.params.id).select('title status createdBy instructorId');
     const data = { ...req.body };
     if (typeof data.skillPath === 'string') data.skillPath = data.skillPath.trim();
     if (!data.skillPath) {
@@ -358,6 +396,19 @@ router.put('/courses/:id', adminAuth, async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(data, 'chapters') && !Array.isArray(data.chapters)) data.chapters = [];
     if (Object.prototype.hasOwnProperty.call(data, 'status')) {
       data.status = data.status === 'published' ? 'published' : 'draft';
+      if (data.status === 'published') {
+        data.isApproved = true;
+        data.approvalRequestedAt = null;
+        data.approvedAt = new Date();
+        data.approvedBy = req.admin._id;
+      } else if (data.status === 'draft') {
+        // If an instructor course is moved back to draft, it should no longer be considered approved.
+        if (before && !before.createdBy && before.instructorId) {
+          data.isApproved = false;
+          data.approvedAt = null;
+          data.approvedBy = null;
+        }
+      }
     }
     const updated = await Course.findByIdAndUpdate(req.params.id, data, { new: true });
     if (!updated) return res.status(404).json({ error: 'Course not found' });
@@ -407,14 +458,52 @@ router.get('/users', adminAuth, async (req, res) => {
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 10);
     const search = (req.query.search || '').trim();
+    const role = String(req.query.role || '').trim().toLowerCase();
     const filter = search
       ? { $or: [{ name: { $regex: search, $options: 'i' } }, { email: { $regex: search, $options: 'i' } }] }
       : {};
+    if (role) filter.role = role;
     const [items, total] = await Promise.all([
       User.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
       User.countDocuments(filter)
     ]);
     res.json({ items, page, totalPages: Math.max(1, Math.ceil(total / limit)), total });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Transfer a course's ownership to an instructor (so it shows under Instructor dashboard)
+router.patch('/courses/:id/transfer-to-instructor', adminAuth, async (req, res) => {
+  try {
+    if (!objectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+    const instructorId = String(req.body?.instructorId || '').trim();
+    if (!objectId(instructorId)) return res.status(400).json({ error: 'Valid instructorId is required' });
+
+    const instructor = await User.findById(instructorId).select('_id role email name isActive');
+    if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
+    if (String(instructor.role) !== 'instructor') return res.status(400).json({ error: 'User is not an instructor' });
+    if (instructor.isActive === false) return res.status(400).json({ error: 'Instructor account is deactivated' });
+
+    const course = await Course.findById(req.params.id);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    course.instructorId = instructor._id;
+    course.createdBy = null; // no longer admin-owned
+
+    // If it is already published, keep it approved so it stays visible publicly.
+    if (String(course.status || '') === 'published') {
+      course.isApproved = true;
+      course.approvalRequestedAt = null;
+      course.approvedAt = course.approvedAt || new Date();
+      course.approvedBy = course.approvedBy || req.admin._id;
+    }
+
+    await course.save();
+    await activity('course_transferred', `Course transferred to instructor: ${course.title} -> ${instructor.email}`);
+
+    const out = await Course.findById(course._id).populate('skillPath', 'title').populate('instructorId', 'name email');
+    res.json({ course: out });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

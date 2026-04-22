@@ -1,5 +1,6 @@
 import React from 'react';
 import adminApi from '../../lib/adminApi';
+import { apiFetch } from '../../lib/apiFetch';
 
 export default function AdminLogin() {
   const [email, setEmail] = React.useState('');
@@ -15,11 +16,20 @@ export default function AdminLogin() {
     setError('');
     setLoading(true);
     try {
-      const res = await adminApi.post('/auth/login', { email, password });
-      localStorage.setItem('adminData', JSON.stringify(res.data.admin));
+      const res = await apiFetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Login failed');
+      if (data?.user?.role !== 'admin') {
+        await apiFetch('/auth/logout', { method: 'POST' }).catch(() => null);
+        throw new Error('Admin access required');
+      }
       window.location.href = '/admin/dashboard';
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed');
+      setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }

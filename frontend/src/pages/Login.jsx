@@ -31,11 +31,17 @@ export default function Login() {
   const location = useLocation();
   const [mode, setMode] = useState(location.pathname === '/signup' ? 'signup' : 'login'); // login | signup
   const [authMethod, setAuthMethod] = useState('email'); // email | google
+  const [role, setRole] = useState('student'); // student | instructor
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [out, setOut] = useState('');
   const [isError, setIsError] = useState(false);
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [resendOut, setResendOut] = useState('');
+  const [resendBusy, setResendBusy] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const googleBtnRef = useRef(null);
   const [googleStatus, setGoogleStatus] = useState('');
 
@@ -45,8 +51,63 @@ export default function Login() {
     setName('');
     setEmail('');
     setPassword('');
+    setRole('student');
     setOut('');
     setIsError(false);
+    setNeedsVerify(false);
+    setResendOut('');
+    setResendBusy(false);
+    setVerificationCode('');
+    setVerifying(false);
+  }
+
+  async function resendVerification() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) return;
+    try {
+      setResendBusy(true);
+      setResendOut('');
+      const res = await apiFetch('/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to resend verification email');
+      setResendOut(data?.message || 'Verification code sent (if the account exists and is unverified).');
+    } catch (err) {
+      setResendOut(err.message || 'Failed to resend verification email');
+    } finally {
+      setResendBusy(false);
+    }
+  }
+
+  async function verifyCode() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !verificationCode) return;
+    try {
+      setVerifying(true);
+      setOut('');
+      const res = await apiFetch('/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail, code: verificationCode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOut('Account verified! You can now log in.');
+        setNeedsVerify(false);
+        setVerificationCode('');
+      } else {
+        setIsError(true);
+        setOut(data.error || 'Verification failed');
+      }
+    } catch (err) {
+      setIsError(true);
+      setOut(`Network error: ${err.message}`);
+    } finally {
+      setVerifying(false);
+    }
   }
 
   useEffect(() => {
@@ -68,13 +129,15 @@ export default function Login() {
     try {
       setIsError(false);
       setOut('');
+      setNeedsVerify(false);
+      setResendOut('');
       setGoogleStatus('Signing in with Google…');
 
 
       const res = await apiFetch('/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential })
+        body: JSON.stringify({ credential, role: mode === 'signup' ? role : undefined })
       });
       const data = await res.json();
 
@@ -83,13 +146,19 @@ export default function Login() {
         if (res.status === 201) {
           // New account created - needs email verification
           setOut('Account created! Please check your email to verify your account.');
+          setNeedsVerify(true);
         } else {
           // Existing account - logged in
-          window.location.href = '/dashboard';
+          const nextRole = data?.user?.role || 'student';
+          if (nextRole === 'admin') window.location.href = '/admin/dashboard';
+          else if (nextRole === 'instructor') window.location.href = '/instructor/dashboard';
+          else window.location.href = '/dashboard';
         }
         return;
       }
 
+      const verifyRequired = res.status === 403 && String(data?.error || '').toLowerCase().includes('verify');
+      if (verifyRequired) setNeedsVerify(true);
       setIsError(true);
       setOut(data.error || JSON.stringify(data));
     } catch (err) {
@@ -163,11 +232,13 @@ export default function Login() {
     const payload =
       mode === 'login'
         ? { email: normalizedEmail, password }
-        : { name: normalizedName, email: normalizedEmail, password };
+        : { name: normalizedName, email: normalizedEmail, password, role };
 
     try {
       setIsError(false);
       setOut('');
+      setNeedsVerify(false);
+      setResendOut('');
 
       const res = await apiFetch(`/auth/${endpoint}`, {
         method: 'POST',
@@ -178,23 +249,36 @@ export default function Login() {
 
       if (res.ok) {
         setIsError(false);
-        if (mode === 'register') {
+        if (mode === 'signup') {
           // Registration successful - email verification required
-          setOut('Account created! Check your email to verify your account before logging in.');
+          setOut('Account created! Check your email for the verification code.');
+          setNeedsVerify(true);
           setName('');
           setEmail('');
           setPassword('');
         } else {
           // Login successful
-          window.location.href = '/dashboard';
+          const nextRole = data?.user?.role || 'student';
+          if (nextRole === 'admin') window.location.href = '/admin/dashboard';
+          else if (nextRole === 'instructor') window.location.href = '/instructor/dashboard';
+          else window.location.href = '/dashboard';
         }
       } else {
         setIsError(true);
+        const verifyRequired = res.status === 403 && String(data?.error || '').toLowerCase().includes('verify');
+        if (verifyRequired) setNeedsVerify(true);
         // Handle specific error messages
         if (data.details && Array.isArray(data.details)) {
           setOut(data.details.join('\n'));
         } else {
-          setOut(data.error || JSON.stringify(data));
+          const msg = data.error || JSON.stringify(data);
+          if (mode === 'login' && msg === 'Invalid credentials') {
+            setOut(
+              "Invalid credentials. If you signed up with Google, use 'Sign in with Google' (or reset your password first via 'Forgot password?')."
+            );
+          } else {
+            setOut(msg);
+          }
         }
       }
     } catch (err) {
@@ -269,6 +353,22 @@ export default function Login() {
             ) : null}
 
             <form onSubmit={submit} className="mt-5 space-y-4">
+              {mode === 'signup' ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">Register as</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Choose Student or Instructor</div>
+                  </div>
+                  <Segmented
+                    value={role}
+                    onChange={setRole}
+                    options={[
+                      { value: 'student', label: 'Student' },
+                      { value: 'instructor', label: 'Instructor' }
+                    ]}
+                  />
+                </div>
+              ) : null}
               {authMethod === 'google' && googleClientId ? (
                 <div className="space-y-2">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Continue with</div>
@@ -344,7 +444,37 @@ export default function Login() {
                     : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200'
                 ].join(' ')}
               >
-                {out}
+                <div className="space-y-3">
+                  <div>{out}</div>
+                  {needsVerify && authMethod === 'email' && email.trim() ? (
+                    <div className="space-y-3">
+                      <div className="text-xs text-slate-600 dark:text-slate-300">
+                        Enter the 6-digit code sent to your email:
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={verificationCode}
+                          onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          type="text"
+                          placeholder="123456"
+                          className="flex-1"
+                        />
+                        <Button type="button" variant="primary" onClick={verifyCode} disabled={verifying || verificationCode.length !== 6}>
+                          {verifying ? 'Verifying…' : 'Verify'}
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Button type="button" variant="outline" onClick={resendVerification} disabled={resendBusy}>
+                          {resendBusy ? 'Sending…' : 'Resend code'}
+                        </Button>
+                        <div className="text-xs text-slate-600 dark:text-slate-300">
+                          Check your email for the code.
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {resendOut ? <div className="text-xs text-slate-600 dark:text-slate-300">{resendOut}</div> : null}
+                </div>
               </div>
             ) : null}
           </div>

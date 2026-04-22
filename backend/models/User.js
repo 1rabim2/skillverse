@@ -13,7 +13,7 @@ const UserSchema = new mongoose.Schema({
   github: { type: String, default: '' },
   linkedin: { type: String, default: '' },
   avatarUrl: { type: String, default: '' },
-  role: { type: String, enum: ['student', 'admin'], default: 'student' },
+  role: { type: String, enum: ['student', 'instructor', 'admin'], default: 'student' },
   isActive: { type: Boolean, default: true },
   enrolledCourses: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Course' }],
   progress: [{

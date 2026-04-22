@@ -30,7 +30,8 @@ const ProjectSubmissionSchema = new mongoose.Schema(
     },
     submittedAt: { type: Date, default: null },
     reviewedAt: { type: Date, default: null },
-    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null }
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
+    reviewedByInstructor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
   },
   { timestamps: true }
 );

@@ -840,6 +840,8 @@ router.post('/enroll', authMiddleware, requireStudent, async (req, res) => {
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
     if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
+    if (course.status && course.status !== 'published') return res.status(404).json({ error: 'Course not found' });
+    if (course.isApproved === false && !course.createdBy) return res.status(404).json({ error: 'Course not found' });
 
     const alreadyEnrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
     if (!alreadyEnrolled) user.enrolledCourses.push(course._id);

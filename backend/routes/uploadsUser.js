@@ -1,5 +1,6 @@
 const express = require('express');
 const { writeUpload } = require('../utils/uploadStorage');
+const requireRole = require('../middleware/requireRole');
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ function getOriginalName(req) {
   return String(header || '').trim();
 }
 
-router.post('/image', rawParser('6mb'), async (req, res) => {
+router.post('/image', requireRole(['student', 'instructor']), rawParser('6mb'), async (req, res) => {
   try {
     const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
     if (!mime.startsWith('image/')) return res.status(415).json({ error: 'Expected an image upload' });
@@ -40,7 +41,7 @@ router.post('/image', rawParser('6mb'), async (req, res) => {
   }
 });
 
-router.post('/video', rawParser('250mb'), async (req, res) => {
+router.post('/video', requireRole(['student', 'instructor']), rawParser('250mb'), async (req, res) => {
   try {
     const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
     if (!mime.startsWith('video/')) return res.status(415).json({ error: 'Expected a video upload' });
@@ -62,4 +63,3 @@ router.post('/video', rawParser('250mb'), async (req, res) => {
 });
 
 module.exports = router;
-

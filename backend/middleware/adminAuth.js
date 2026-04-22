@@ -16,7 +16,7 @@ module.exports = async function adminAuth(req, res, next) {
   if (!JWT_SECRET) return res.status(500).json({ error: 'Server misconfigured (missing JWT_SECRET)' });
   
   // Try to get token from httpOnly cookie (most secure)
-  const token = req.cookies?.adminToken || getBearerToken(req);
+  const token = req.cookies?.adminToken || req.cookies?.authToken || getBearerToken(req);
   
   if (!token) return res.status(401).json({ error: 'No token provided' });
 
