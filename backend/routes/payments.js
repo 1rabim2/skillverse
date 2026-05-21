@@ -69,7 +69,6 @@ router.post('/khalti/subscription/monthly/initiate', requireStudent, async (req,
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     const { secret, baseUrl, monthlyAmount, frontendUrl } = khaltiConfig();
 
@@ -144,7 +143,6 @@ router.post('/khalti/lookup', requireStudent, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     const pidx = String(req.body?.pidx || '').trim();
     if (!pidx) return res.status(400).json({ error: 'pidx required' });

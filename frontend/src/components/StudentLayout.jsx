@@ -41,7 +41,7 @@ export default function StudentLayout() {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+    <div className="min-h-screen">
       <HeaderBar user={user} onLogout={logout} />
       <main className="mx-auto w-full max-w-7xl p-4 lg:p-6 2xl:max-w-[1440px]">
         <Outlet />

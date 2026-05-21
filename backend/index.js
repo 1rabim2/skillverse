@@ -23,6 +23,7 @@ const userRoutes = require('./routes/user');
 const communityRoutes = require('./routes/community');
 const coursesRoutes = require('./routes/courses');
 const instructorRoutes = require('./routes/instructor');
+const chatRoutes = require('./routes/chat');
 const uploadsAdminRoutes = require('./routes/uploadsAdmin');
 const uploadsUserRoutes = require('./routes/uploadsUser');
 const paymentsRoutes = require('./routes/payments');
@@ -30,6 +31,7 @@ const optionalAuth = require('./middleware/optionalAuth');
 const authMiddleware = require('./middleware/auth');
 const { csrfProtection, verifyCSRFToken } = require('./middleware/csrf');
 const Admin = require('./models/Admin');
+const AdminSetting = require('./models/AdminSetting');
 const Course = require('./models/Course');
 const SkillPath = require('./models/SkillPath');
 const User = require('./models/User');
@@ -130,6 +132,24 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ token: req.csrfToken });
 });
 
+// Public localization settings (default language + supported languages).
+// Used by the frontend to pick an initial language before a user makes a choice.
+app.get('/api/settings/localization', async (req, res) => {
+  const fallback = {
+    defaultLanguage: 'ne',
+    supportedLanguages: ['en', 'ne'],
+    labels: { en: { welcome: 'Welcome' }, ne: { welcome: 'Swagat cha' } }
+  };
+
+  try {
+    const setting = await AdminSetting.findOne({ key: 'localization' }).select('value');
+    const value = setting?.value || null;
+    res.json(value && typeof value === 'object' ? value : fallback);
+  } catch {
+    res.json(fallback);
+  }
+});
+
 // Apply CSRF verification to all state-changing routes
 app.use((req, res, next) => {
   verifyCSRFToken(req, res, next);
@@ -146,6 +166,7 @@ app.use('/api/community', communityRoutes);
 // Extra course actions (instructor/admin) live in a router to avoid growing index.js further.
 app.use('/api/courses', coursesRoutes);
 app.use('/api/instructor', instructorRoutes);
+app.use('/api/chat', authMiddleware, chatRoutes);
 
 app.get('/api/courses', async (req, res) => {
   try {
@@ -186,6 +207,7 @@ app.get('/api/courses', async (req, res) => {
     const [items, total] = await Promise.all([
       Course.find(filter)
         .populate('skillPath', 'title')
+        .populate('instructorId', 'name avatarUrl headline')
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
@@ -207,7 +229,9 @@ app.get('/api/courses/:id', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid id' });
-    const course = await Course.findById(id).populate('skillPath', 'title description');
+    const course = await Course.findById(id)
+      .populate('skillPath', 'title description')
+      .populate('instructorId', 'name avatarUrl headline bio website github linkedin');
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     const role = String(req.user?.role || '').toLowerCase();
@@ -256,8 +280,8 @@ app.get('/api/courses/:id', optionalAuth, async (req, res) => {
     if (isAdmin || isOwningInstructor) {
       allowVideos = true;
     } else if (req.user?.id) {
-      const u = await User.findById(req.user.id).select('subscription isActive isVerified role');
-      if (u && u.isActive && u.isVerified && u.role === 'student' && isSubscriptionActive(u)) allowVideos = true;
+      const u = await User.findById(req.user.id).select('subscription isActive role');
+      if (u && u.isActive && u.role === 'student' && isSubscriptionActive(u)) allowVideos = true;
     }
 
     const courseOut = allowVideos ? payload : sanitizeCourseForNonSubscriber(payload);

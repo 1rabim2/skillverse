@@ -9,11 +9,11 @@ function generateCSRFToken() {
 
 // Generate CSRF token endpoint middleware
 function csrfProtection(req, res, next) {
-  // Generate and set CSRF token in a cookie if not already present
+  // Generate and set CSRF token in a secure httpOnly cookie
   if (!req.cookies || !req.cookies['XSRF-TOKEN']) {
     const token = generateCSRFToken();
     res.cookie('XSRF-TOKEN', token, {
-      httpOnly: false, // Frontend needs to read this
+      httpOnly: true, // SECURE: httpOnly prevents XSS attacks
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
@@ -22,6 +22,9 @@ function csrfProtection(req, res, next) {
   } else {
     req.csrfToken = req.cookies['XSRF-TOKEN'];
   }
+  
+  // Provide token to frontend via response header for initial page load
+  res.set('X-CSRF-TOKEN', req.csrfToken);
   next();
 }
 

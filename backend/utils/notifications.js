@@ -41,7 +41,7 @@ async function notifyManyUsers(userIds, payload) {
 }
 
 async function notifyAllStudents(payload, { limit = 250 } = {}) {
-  const users = await User.find({ role: 'student', isActive: true, isVerified: true }).select('_id').sort({ createdAt: -1 }).limit(limit);
+  const users = await User.find({ role: 'student', isActive: true }).select('_id').sort({ createdAt: -1 }).limit(limit);
   await Promise.all(users.map((u) => notifyUser(u._id, payload).catch(() => null)));
 }
 
@@ -52,4 +52,3 @@ module.exports = {
   notifyManyUsers,
   notifyAllStudents
 };
-

@@ -1,16 +1,18 @@
 import React from 'react';
 import { Award } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Card from './ui/Card';
 import Button from './ui/Button';
 
 export default function Achievements({ badges = [] }) {
+  const { t } = useTranslation();
   return (
     <Card as="aside" className="p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-extrabold">Achievements</div>
+          <div className="text-sm font-extrabold">{t('achievements.title')}</div>
           <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            Badges you have unlocked.
+            {t('achievements.subtitle')}
           </div>
         </div>
         <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300">
@@ -29,20 +31,20 @@ export default function Achievements({ badges = [] }) {
             </span>
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{name}</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Unlocked</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('achievements.unlocked')}</div>
             </div>
           </div>
         ))}
         {badges.length === 0 && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-300">
-            No badges yet. Complete a course to earn your first badge.
+            {t('achievements.noneTitle')} {t('achievements.noneSubtitle')}
           </div>
         )}
       </div>
 
       <div className="mt-4">
         <Button variant="outline" onClick={() => (window.location.href = '/portfolio')}>
-          View portfolio
+          {t('achievements.viewPortfolio')}
         </Button>
       </div>
     </Card>

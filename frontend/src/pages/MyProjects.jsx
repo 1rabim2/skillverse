@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -19,6 +20,7 @@ function StatusPill({ status }) {
 }
 
 export default function MyProjects() {
+  const { t } = useTranslation();
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
@@ -54,14 +56,14 @@ export default function MyProjects() {
     return (
       <div className="grid min-h-[70vh] place-items-center p-4">
         <Card className="w-full max-w-xl p-6">
-          <div className="text-lg font-extrabold tracking-tight">My Projects</div>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Sign in as a student to view your project submissions.</p>
+          <div className="text-lg font-extrabold tracking-tight">{t('projects.title')}</div>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('projects.blockedMsg')}</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button variant="primary" onClick={() => (window.location.href = '/login')}>
-              Go to student login
+              {t('profile.goStudentLogin')}
             </Button>
             <Button variant="outline" onClick={() => (window.location.href = '/dashboard')}>
-              Back to dashboard
+              {t('certificates.backToDashboard')}
             </Button>
           </div>
         </Card>
@@ -73,12 +75,12 @@ export default function MyProjects() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">My Projects</h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Track your submissions and review feedback.</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{t('projects.title')}</h1>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t('projects.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={load} disabled={loading}>
-            Refresh
+            {t('projects.refresh')}
           </Button>
           <Button variant="outline" as={Link} to="/dashboard">
             Dashboard
@@ -88,11 +90,11 @@ export default function MyProjects() {
 
       {loading ? (
         <Card className="p-5">
-          <div className="text-sm text-slate-600 dark:text-slate-300">Loading…</div>
+          <div className="text-sm text-slate-600 dark:text-slate-300">{t('projects.loading')}</div>
         </Card>
       ) : error ? (
         <Card className="p-5">
-          <div className="text-sm font-semibold text-slate-900 dark:text-white">Could not load projects</div>
+          <div className="text-sm font-semibold text-slate-900 dark:text-white">{t('projects.couldNotLoad')}</div>
           <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{error}</div>
         </Card>
       ) : (
@@ -102,12 +104,12 @@ export default function MyProjects() {
               <table className="w-full min-w-[860px] border-collapse text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-950/40 dark:text-slate-300">
                   <tr>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Course</th>
-                    <th className="px-4 py-3">Lesson</th>
-                    <th className="px-4 py-3">Files</th>
-                    <th className="px-4 py-3">Updated</th>
-                    <th className="px-4 py-3 text-right">Open</th>
+                    <th className="px-4 py-3">{t('projects.status')}</th>
+                    <th className="px-4 py-3">{t('projects.course')}</th>
+                    <th className="px-4 py-3">{t('projects.lesson')}</th>
+                    <th className="px-4 py-3">{t('projects.files')}</th>
+                    <th className="px-4 py-3">{t('projects.updated')}</th>
+                    <th className="px-4 py-3 text-right">{t('projects.open')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -116,14 +118,14 @@ export default function MyProjects() {
                       <td className="px-4 py-3">
                         <StatusPill status={p.status} />
                       </td>
-                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{p.course?.title || 'Course'}</td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{p.lessonTitle || 'Project'}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{p.course?.title || t('projects.course')}</td>
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{p.lessonTitle || t('projects.project')}</td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.attachmentCount || 0}</td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{p.updatedAt ? new Date(p.updatedAt).toLocaleString() : '-'}</td>
                       <td className="px-4 py-3 text-right">
                         {p.course?.id && p.lessonId ? (
                           <Button as={Link} to={`/courses/${encodeURIComponent(p.course.id)}?lesson=${encodeURIComponent(String(p.lessonId))}`} variant="outline">
-                            View
+                            {t('projects.view')}
                           </Button>
                         ) : (
                           <span className="text-xs text-slate-500">—</span>
@@ -134,7 +136,7 @@ export default function MyProjects() {
                   {items.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-6 text-sm text-slate-600 dark:text-slate-300">
-                        No project submissions yet.
+                        {t('projects.noSubmissions')}
                       </td>
                     </tr>
                   ) : null}
@@ -147,4 +149,3 @@ export default function MyProjects() {
     </div>
   );
 }
-

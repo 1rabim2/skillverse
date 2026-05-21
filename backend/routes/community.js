@@ -69,7 +69,6 @@ router.get('/', authMiddleware, requireStudentJwt, async (req, res) => {
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(50, Math.max(1, Number(req.query.limit || 20)));
@@ -201,7 +200,6 @@ router.get('/:id', authMiddleware, requireStudentJwt, async (req, res) => {
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!objectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
 
     const post = await CommunityPost.findById(req.params.id);
@@ -242,7 +240,6 @@ router.post('/', authMiddleware, requireStudentJwt, async (req, res) => {
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     const content = cleanText(req.body?.content, 1200);
     if (!content || content.length < 8) return res.status(400).json({ error: 'Question is too short' });
@@ -277,7 +274,6 @@ router.patch('/:id', authMiddleware, requireStudentJwt, async (req, res) => {
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     if (!objectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
     const content = cleanText(req.body?.content, 1200);
@@ -304,7 +300,6 @@ router.post('/:id/comments', authMiddleware, requireStudentJwt, async (req, res)
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     if (!objectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
     const content = cleanText(req.body?.content, 800);
@@ -334,7 +329,6 @@ router.delete('/:postId/comments/:commentId', authMiddleware, requireStudentJwt,
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     if (!objectId(req.params.postId) || !objectId(req.params.commentId)) return res.status(400).json({ error: 'Invalid id' });
     const post = await CommunityPost.findById(req.params.postId);
@@ -359,7 +353,6 @@ router.patch('/:id/report', authMiddleware, requireStudentJwt, async (req, res) 
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     if (!objectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
     const post = await CommunityPost.findById(req.params.id);
@@ -379,7 +372,6 @@ router.patch('/:postId/comments/:commentId/report', authMiddleware, requireStude
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     if (!objectId(req.params.postId) || !objectId(req.params.commentId)) return res.status(400).json({ error: 'Invalid id' });
     const post = await CommunityPost.findById(req.params.postId);
@@ -401,7 +393,6 @@ router.delete('/:id', authMiddleware, requireStudentJwt, async (req, res) => {
     const user = await loadStudent(req);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     if (!objectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
     const post = await CommunityPost.findById(req.params.id);

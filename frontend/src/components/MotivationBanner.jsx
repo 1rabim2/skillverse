@@ -1,9 +1,11 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Card from './ui/Card';
 import Button from './ui/Button';
 
 export default function MotivationBanner() {
+  const { t } = useTranslation();
   return (
     <Card className="mt-6 overflow-hidden p-0">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -12,18 +14,18 @@ export default function MotivationBanner() {
             <Sparkles size={18} />
           </div>
           <div>
-            <div className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Keep your momentum</div>
+            <div className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">{t('motivation.title')}</div>
             <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              Small, consistent sessions add up. Pick one lesson and finish it today.
+              {t('motivation.subtitle')}
             </div>
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="primary" onClick={() => (window.location.href = '/courses')}>
-            Browse courses
+            {t('motivation.browseCourses')}
           </Button>
           <Button variant="outline" onClick={() => (window.location.href = '/dashboard')}>
-            View progress
+            {t('motivation.viewProgress')}
           </Button>
         </div>
       </div>
@@ -31,4 +33,3 @@ export default function MotivationBanner() {
     </Card>
   );
 }
-

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -16,7 +17,34 @@ function normalize(text) {
   return String(text || '').trim().toLowerCase();
 }
 
+function normalizeKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function displayLevel(level, t) {
+  const key = normalizeKey(level);
+  if (key === 'beginner') return t('meta.level.beginner');
+  if (key === 'intermediate') return t('meta.level.intermediate');
+  if (key === 'advanced') return t('meta.level.advanced');
+  return String(level || '').trim() || t('meta.level.beginner');
+}
+
+function displayCategory(category, t) {
+  const key = normalizeKey(category);
+  if (key === 'web_fundamentals') return t('meta.category.web_fundamentals');
+  if (key === 'frontend') return t('meta.category.frontend');
+  if (key === 'backend') return t('meta.category.backend');
+  if (key === 'database') return t('meta.category.database');
+  if (key === 'tools') return t('meta.category.tools');
+  if (key === 'general') return t('meta.category.general');
+  return String(category || '').trim() || t('meta.category.general');
+}
+
 export default function SkillPaths() {
+  const { t } = useTranslation();
   const [items, setItems] = React.useState([]);
   const [user, setUser] = React.useState(null);
   const [authed, setAuthed] = React.useState(false);
@@ -50,7 +78,7 @@ export default function SkillPaths() {
       const [pathsRes, meRes] = await Promise.all([apiFetch('/skill-paths'), apiFetch('/user/me')]);
 
       const pathsData = await pathsRes.json().catch(() => ({}));
-      if (!pathsRes.ok) throw new Error(pathsData?.error || 'Failed to load skill paths');
+      if (!pathsRes.ok) throw new Error(pathsData?.error || t('skillPaths.couldNotLoad'));
       setItems(Array.isArray(pathsData) ? pathsData : []);
 
       const meData = await meRes.json().catch(() => null);
@@ -119,29 +147,29 @@ export default function SkillPaths() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Skill Paths</div>
+          <div className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{t('skillPaths.title')}</div>
           <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            Choose a path and follow the recommended order.
+            {t('skillPaths.subtitle')}
           </div>
         </div>
         <div className="w-full max-w-md">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search paths or courses..." />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('skillPaths.searchPlaceholder')} />
         </div>
       </div>
 
       {loading ? (
         <Card className="p-5">
-          <div className="text-sm text-slate-600 dark:text-slate-300">Loading skill paths...</div>
+          <div className="text-sm text-slate-600 dark:text-slate-300">{t('skillPaths.loading')}</div>
         </Card>
       ) : null}
 
       {error ? (
         <Card className="border-red-200 bg-red-50 p-5 dark:border-red-900/40 dark:bg-red-950/20">
-          <div className="text-sm font-semibold text-red-800 dark:text-red-200">Could not load skill paths</div>
+          <div className="text-sm font-semibold text-red-800 dark:text-red-200">{t('skillPaths.couldNotLoad')}</div>
           <div className="mt-2 text-sm text-red-700 dark:text-red-200">{error}</div>
           <div className="mt-4">
             <Button variant="outline" onClick={load}>
-              Retry
+              {t('common.retry')}
             </Button>
           </div>
         </Card>
@@ -172,19 +200,19 @@ export default function SkillPaths() {
                 >
                   <div className="min-w-0">
                     <div className="truncate text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
-                      {p?.title || 'Untitled path'}
+                      {p?.title || t('skillPaths.untitledPath')}
                     </div>
                     <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                      {p?.description || 'No description yet.'}
+                      {p?.description || t('skillPaths.noDescription')}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Chip>{courses.length} courses</Chip>
-                      {nextIdx >= 0 ? <Chip>Next: Step {nextIdx + 1}</Chip> : null}
+                      <Chip>{t('skillPaths.coursesCount', { count: courses.length })}</Chip>
+                      {nextIdx >= 0 ? <Chip>{t('skillPaths.nextStep', { step: nextIdx + 1 })}</Chip> : null}
                     </div>
                   </div>
                   <div className="shrink-0">
                     <span className="inline-flex rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                      {isOpen ? 'Hide' : 'View'}
+                      {isOpen ? t('common.hide') : t('common.view')}
                     </span>
                   </div>
                 </button>
@@ -192,20 +220,22 @@ export default function SkillPaths() {
                 {isOpen ? (
                   <div className="border-t border-slate-200 p-5 dark:border-slate-800">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm font-extrabold text-slate-900 dark:text-white">Course order</div>
+                      <div className="text-sm font-extrabold text-slate-900 dark:text-white">{t('skillPaths.courseOrder')}</div>
                       <div className="flex gap-2">
                         <Button variant="outline" onClick={() => (window.location.href = `/skill-paths/${encodeURIComponent(id)}`)}>
-                          Open path
+                          {t('skillPaths.openPath')}
                         </Button>
                         <Button variant="outline" onClick={() => (window.location.href = `/courses?skillPath=${encodeURIComponent(id)}`)}>
-                          View in Courses
+                          {t('skillPaths.viewInCourses')}
                         </Button>
                         <Button
                           variant="primary"
                           disabled={busyId === id || courses.length === 0}
                           onClick={() => startOrContinuePath(p)}
                         >
-                          {authed ? (anyEnrolled ? 'Continue path' : 'Start path') : 'Sign in to start'}
+                          {authed
+                            ? (anyEnrolled ? t('skillPaths.continuePath') : t('skillPaths.startPath'))
+                            : t('skillPaths.signInToStart')}
                         </Button>
                       </div>
                     </div>
@@ -219,14 +249,14 @@ export default function SkillPaths() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                Step {idx + 1}
+                                {t('skillPaths.step', { step: idx + 1 })}
                               </div>
                               <div className="mt-1 truncate text-sm font-extrabold text-slate-900 dark:text-white">
-                                {c?.title || 'Untitled course'}
+                                {c?.title || t('searchBox.untitledCourse')}
                               </div>
                               <div className="mt-2 flex flex-wrap gap-2">
-                                <Chip>{c?.level || 'Beginner'}</Chip>
-                                <Chip>{c?.category || 'General'}</Chip>
+                                <Chip>{displayLevel(c?.level, t)}</Chip>
+                                <Chip>{displayCategory(c?.category, t)}</Chip>
                               </div>
                             </div>
                             <Button
@@ -236,14 +266,14 @@ export default function SkillPaths() {
                                 if (courseId) window.location.href = `/courses/${encodeURIComponent(courseId)}`;
                               }}
                             >
-                              Open
+                              {t('common.open')}
                             </Button>
                           </div>
                         </div>
                       ))}
                       {courses.length === 0 ? (
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-300 md:col-span-2">
-                          No published courses linked to this path yet.
+                          {t('skillPaths.noCoursesInPath')}
                         </div>
                       ) : null}
                     </div>
@@ -255,7 +285,7 @@ export default function SkillPaths() {
 
           {filtered.length === 0 ? (
             <Card className="p-5">
-              <div className="text-sm text-slate-600 dark:text-slate-300">No skill paths found.</div>
+              <div className="text-sm text-slate-600 dark:text-slate-300">{t('skillPaths.noPathsFound')}</div>
             </Card>
           ) : null}
         </div>

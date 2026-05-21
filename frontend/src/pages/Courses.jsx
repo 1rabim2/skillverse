@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import CourseSearchBox from '../components/CourseSearchBox';
 import CourseThumb from '../components/CourseThumb';
+import { resolveAssetUrl } from '../lib/assets';
 
 function Chip({ children }) {
   return (
@@ -12,7 +14,62 @@ function Chip({ children }) {
   );
 }
 
+function normalizeKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function displayLevel(level, t) {
+  const key = normalizeKey(level);
+  if (key === 'beginner') return t('meta.level.beginner');
+  if (key === 'intermediate') return t('meta.level.intermediate');
+  if (key === 'advanced') return t('meta.level.advanced');
+  return String(level || '').trim() || t('meta.level.beginner');
+}
+
+function displayCategory(category, t) {
+  const key = normalizeKey(category);
+  if (key === 'web_fundamentals') return t('meta.category.web_fundamentals');
+  if (key === 'frontend') return t('meta.category.frontend');
+  if (key === 'backend') return t('meta.category.backend');
+  if (key === 'database') return t('meta.category.database');
+  if (key === 'tools') return t('meta.category.tools');
+  if (key === 'general') return t('meta.category.general');
+  return String(category || '').trim() || t('meta.category.general');
+}
+
+function MentorBadge({ mentor }) {
+  if (!mentor) return null;
+  const name = String(mentor?.name || 'Mentor');
+  const avatar = resolveAssetUrl(mentor?.avatarUrl || '');
+  const initial = name.slice(0, 1).toUpperCase();
+  return (
+    <div className="mt-3 flex items-center gap-2">
+      {avatar ? (
+        <img
+          src={avatar}
+          alt={name}
+          className="h-7 w-7 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+        />
+      ) : (
+        <div className="grid h-7 w-7 place-items-center rounded-full bg-slate-200 text-xs font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          {initial || 'M'}
+        </div>
+      )}
+      <div className="min-w-0">
+        <div className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{name}</div>
+        {mentor?.headline ? (
+          <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{mentor.headline}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function Courses() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -95,18 +152,18 @@ export default function Courses() {
     <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Browse Courses</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight">{t('courses.browseTitle')}</h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              Discover published courses and start learning.
+              {t('courses.browseSubtitle')}
             </p>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Sign in to enroll and track progress.</p>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('courses.signInToEnroll')}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
               to="/dashboard"
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
-              Back to Dashboard
+              {t('courses.backToDashboard')}
             </Link>
           </div>
         </div>
@@ -117,7 +174,7 @@ export default function Courses() {
               className="md:col-span-2"
               value={search}
               onChange={setSearch}
-              placeholder="Search by title, category, or description..."
+              placeholder={t('courses.searchPlaceholder')}
               onSubmit={(q) => {
                 const next = String(q || '');
                 setSearch(next);
@@ -134,7 +191,7 @@ export default function Courses() {
                 applyFilters({ nextCategory: v, nextPage: 1 });
               }}
             >
-              <option value="">All categories</option>
+              <option value="">{t('courses.allCategories')}</option>
               <option value="Web Fundamentals">Web Fundamentals</option>
               <option value="Frontend">Frontend</option>
               <option value="Backend">Backend</option>
@@ -151,14 +208,14 @@ export default function Courses() {
                 applyFilters({ nextLevel: v, nextPage: 1 });
               }}
             >
-              <option value="">All levels</option>
+              <option value="">{t('courses.allLevels')}</option>
               <option value="Beginner">Beginner</option>
               <option value="Intermediate">Intermediate</option>
               <option value="Advanced">Advanced</option>
             </select>
             <div className="md:col-span-4 flex flex-wrap items-center justify-between gap-2">
               <button className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700">
-                Search
+                {t('courses.search')}
               </button>
             <button
               type="button"
@@ -171,7 +228,7 @@ export default function Courses() {
                 }}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
-                Reset
+                {t('courses.reset')}
               </button>
             </div>
           </form>
@@ -179,12 +236,12 @@ export default function Courses() {
 
       {skillPath ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Filtered by skill path</span>
+          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('courses.filteredByPath')}</span>
           <Link
             to={`/skill-paths/${encodeURIComponent(skillPath)}`}
             className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           >
-            View path
+            {t('courses.viewPath')}
           </Link>
           <button
             type="button"
@@ -194,12 +251,12 @@ export default function Courses() {
               applyFilters({ nextSkillPath: '', nextPage: 1 });
             }}
           >
-            Clear
+            {t('courses.clear')}
           </button>
         </div>
       ) : null}
 
-        {loading && <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">Loading courses...</div>}
+        {loading && <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{t('courses.loading')}</div>}
         {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-200">{error}</div>}
 
         {!loading && !error && (
@@ -211,19 +268,20 @@ export default function Courses() {
                 </div>
                 <h3 className="text-base font-extrabold tracking-tight">{c.title}</h3>
                 <p className="mt-1 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">
-                  {c.description || 'No description yet.'}
+                  {c.description || t('courses.noDescription')}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Chip>{c.category || 'General'}</Chip>
-                  <Chip>{c.level || 'Beginner'}</Chip>
+                  <Chip>{displayCategory(c.category, t)}</Chip>
+                  <Chip>{displayLevel(c.level, t)}</Chip>
                   {c.skillPath?.title ? <Chip>{c.skillPath.title}</Chip> : null}
                 </div>
+                <MentorBadge mentor={c.instructorId || null} />
                 <div className="mt-4 flex items-center justify-between gap-2">
                   <Link
                     to={`/courses/${c._id}`}
                     className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700"
                   >
-                    Open course
+                    {t('courses.openCourse')}
                   </Link>
                   <span className="text-xs text-slate-500">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''}</span>
                 </div>
@@ -231,7 +289,7 @@ export default function Courses() {
             ))}
             {items.length === 0 && (
               <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 sm:col-span-2 lg:col-span-3">
-                No published courses found.
+                {t('courses.noCoursesFound')}
               </div>
             )}
           </div>
@@ -239,7 +297,7 @@ export default function Courses() {
 
         {!loading && totalPages > 1 && (
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">Page {page} / {totalPages}</p>
+            <p className="text-sm text-slate-500">{t('courses.page', { page, total: totalPages })}</p>
             <div className="flex gap-2">
               <button
                 disabled={page <= 1}
@@ -250,7 +308,7 @@ export default function Courses() {
                 }}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900"
               >
-                Prev
+                {t('courses.prev')}
               </button>
               <button
                 disabled={page >= totalPages}
@@ -261,7 +319,7 @@ export default function Courses() {
                 }}
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900"
               >
-                Next
+                {t('courses.next')}
               </button>
             </div>
           </div>

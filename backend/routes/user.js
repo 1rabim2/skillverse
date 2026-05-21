@@ -158,8 +158,16 @@ async function loadUserAndCourse({ userId, courseId }) {
 router.get('/me/dashboard', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
-      .populate('enrolledCourses', 'title category level thumbnailUrl')
-      .populate('progress.course', 'title category level thumbnailUrl')
+      .populate({
+        path: 'enrolledCourses',
+        select: 'title category level thumbnailUrl instructorId',
+        populate: { path: 'instructorId', select: 'name avatarUrl headline' }
+      })
+      .populate({
+        path: 'progress.course',
+        select: 'title category level thumbnailUrl instructorId',
+        populate: { path: 'instructorId', select: 'name avatarUrl headline' }
+      })
       .populate('certificates.course', 'title');
 
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -188,6 +196,7 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
         _id: { $nin: Array.from(enrolledIds) },
         $or: [{ status: 'published' }, { status: { $exists: false } }]
       })
+        .populate('instructorId', 'name avatarUrl headline')
         .sort({ createdAt: -1 })
         .limit(remaining);
       displayCourses.push(...extras);
@@ -201,6 +210,14 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
         category: course.category,
         level: course.level,
         thumbnailUrl: course.thumbnailUrl || '',
+        mentor: course.instructorId
+          ? {
+              id: course.instructorId._id,
+              name: course.instructorId.name || 'Mentor',
+              avatarUrl: course.instructorId.avatarUrl || '',
+              headline: course.instructorId.headline || ''
+            }
+          : null,
         progress: p.percent,
         completed: !!p.completedAt || p.percent >= 100
       };
@@ -241,6 +258,27 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 8);
 
+    // Extract unique mentors from enrolled courses
+    const mentorsMap = new Map();
+    enrolledCourses.forEach((course) => {
+      if (course.instructorId && course.instructorId._id) {
+        const mentorId = String(course.instructorId._id);
+        if (!mentorsMap.has(mentorId)) {
+          mentorsMap.set(mentorId, {
+            id: course.instructorId._id,
+            name: course.instructorId.name || 'Mentor',
+            avatarUrl: course.instructorId.avatarUrl || '',
+            headline: course.instructorId.headline || '',
+            coursesCount: 0,
+            courseId: course._id  // Store first course ID for chat initiation
+          });
+        }
+        const mentor = mentorsMap.get(mentorId);
+        mentor.coursesCount += 1;
+      }
+    });
+    const mentors = Array.from(mentorsMap.values());
+
     res.json({
       user: {
         id: user._id,
@@ -256,6 +294,7 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
       },
       badges,
       courses,
+      mentors,
       recentActivity
     });
   } catch (err) {
@@ -270,7 +309,6 @@ router.get('/me', authMiddleware, requireStudent, async (req, res) => {
       .populate('enrolledCourses', 'title category level thumbnailUrl skillPath');
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     res.json({ user });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load profile' });
@@ -286,7 +324,6 @@ router.get('/notes', authMiddleware, requireStudent, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     const entry = (user.progress || []).find((p) => p.course && String(p.course) === String(courseId));
     const note = entry?.notes?.find((n) => String(n.lessonId || '') === lessonId) || null;
@@ -307,7 +344,6 @@ router.put('/notes', authMiddleware, requireStudent, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     let entry = (user.progress || []).find((p) => p.course && String(p.course) === String(courseId));
     if (!entry) {
@@ -341,7 +377,6 @@ router.get('/course/:courseId/projects/:lessonId', authMiddleware, requireStuden
     const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     const enrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
@@ -429,7 +464,6 @@ router.post(
       const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
       if (!user) return res.status(404).json({ error: 'User not found' });
       if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-      if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
       if (!course) return res.status(404).json({ error: 'Course not found' });
 
       const enrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
@@ -557,7 +591,6 @@ router.put('/course/:courseId/projects/:lessonId', authMiddleware, requireStuden
     const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     const enrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
@@ -638,7 +671,6 @@ router.get('/me/projects', authMiddleware, requireStudent, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     const items = await ProjectSubmission.find({ user: user._id })
       .populate('course', 'title category level')
@@ -785,7 +817,17 @@ router.get('/me/portfolio', authMiddleware, requireStudent, async (req, res) => 
 
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
+
+    const completedTaskKeys = new Set();
+    (user.progress || []).forEach((p) => {
+      const courseId = p?.course?._id ? String(p.course._id) : (p?.course ? String(p.course) : '');
+      if (!courseId) return;
+      (p.completedLessons || []).forEach((x) => {
+        if (!x?.lessonId) return;
+        completedTaskKeys.add(`${courseId}:${String(x.lessonId)}`);
+      });
+    });
+    const tasksCompleted = completedTaskKeys.size;
 
     const completedProgress = (user.progress || []).filter((p) => (p?.completedAt || (p?.percent || 0) >= 100) && p.course);
     const completedCourses = completedProgress
@@ -813,6 +855,7 @@ router.get('/me/portfolio', authMiddleware, requireStudent, async (req, res) => 
       stats: {
         enrolledCourses: (user.enrolledCourses || []).length,
         completedCourses: completedCourses.length,
+        tasksCompleted,
         certificates: issuedCertificates.length
       },
       completedCourses,
@@ -838,7 +881,6 @@ router.post('/enroll', authMiddleware, requireStudent, async (req, res) => {
     const [user, course] = await Promise.all([User.findById(req.user.id), Course.findById(courseId)]);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
     if (course.status && course.status !== 'published') return res.status(404).json({ error: 'Course not found' });
     if (course.isApproved === false && !course.createdBy) return res.status(404).json({ error: 'Course not found' });
@@ -885,7 +927,6 @@ router.post('/progress', authMiddleware, requireStudent, async (req, res) => {
     const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     const lessonCount = totalLessonsForCourse(course);
@@ -928,7 +969,6 @@ router.get('/course/:courseId/progress', authMiddleware, requireStudent, async (
     const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     const entry = (user.progress || []).find((p) => p.course && String(p.course) === String(course._id));
@@ -975,7 +1015,6 @@ router.post('/course/:courseId/lessons/:lessonId/complete', authMiddleware, requ
     const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     const enrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
@@ -1044,7 +1083,6 @@ router.post('/course/:courseId/lessons/:lessonId/quiz', authMiddleware, requireS
     const { user, course } = await loadUserAndCourse({ userId: req.user.id, courseId });
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     const enrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
@@ -1175,7 +1213,6 @@ router.get('/me/certificates', authMiddleware, requireStudent, async (req, res) 
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     const items = await Certificate.find({ user: user._id })
       .populate('course', 'title category level')
@@ -1193,7 +1230,6 @@ router.get('/me/certificates/:certificateId/download', authMiddleware, requireSt
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email' });
 
     const certificate = await Certificate.findOne({
       certificateId: req.params.certificateId,
@@ -1218,6 +1254,156 @@ router.get('/me/certificates/:certificateId/download', authMiddleware, requireSt
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to generate certificate PDF' });
+  }
+});
+
+router.get('/me/game/quiz', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const courseId = String(req.query.courseId || '').trim();
+    const count = Math.min(25, Math.max(1, Number(req.query.count || 10)));
+
+    const user = await User.findById(req.user.id).select('enrolledCourses isActive role');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    if (user.role !== 'student') return res.status(403).json({ error: 'Student access required' });
+
+    const enrolled = new Set((user.enrolledCourses || []).map((id) => String(id)));
+    if (enrolled.size === 0) return res.json({ items: [], count, source: 'enrolled', message: 'Enroll in a course to unlock quiz game questions.' });
+
+    let sourceCourseIds = Array.from(enrolled);
+    if (courseId) {
+      if (!isObjectId(courseId)) return res.status(400).json({ error: 'Invalid courseId' });
+      if (!enrolled.has(courseId)) return res.status(403).json({ error: 'You must enroll in the course to use it in the quiz game' });
+      sourceCourseIds = [courseId];
+    }
+
+    const courses = await Course.find({ _id: { $in: sourceCourseIds } }).select('title chapters');
+    const pool = [];
+    courses.forEach((course) => {
+      const chapters = course?.chapters || [];
+      chapters.forEach((ch) => {
+        (ch?.lessons || []).forEach((ls) => {
+          const questions = ls?.quiz?.questions || [];
+          if (!Array.isArray(questions) || questions.length === 0) return;
+          questions.forEach((q) => {
+            if (!q?.prompt || !Array.isArray(q?.options) || q.options.length < 2) return;
+            pool.push({
+              courseId: String(course._id),
+              courseTitle: course.title || 'Course',
+              lessonId: String(ls._id),
+              lessonTitle: ls.title || 'Quiz',
+              questionId: String(q._id),
+              prompt: String(q.prompt),
+              options: q.options.map((o) => String(o))
+            });
+          });
+        });
+      });
+    });
+
+    // Sample without replacement (Fisher-Yates shuffle prefix).
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = pool[i];
+      pool[i] = pool[j];
+      pool[j] = tmp;
+    }
+
+    const items = pool.slice(0, Math.min(count, pool.length));
+    res.json({ items, count, totalPool: pool.length, source: courseId ? 'course' : 'enrolled' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load quiz game questions' });
+  }
+});
+
+router.post('/me/game/quiz/submit', authMiddleware, requireStudent, async (req, res) => {
+  try {
+    const answers = Array.isArray(req.body?.answers) ? req.body.answers : null;
+    if (!answers) return res.status(400).json({ error: 'answers must be an array' });
+    if (answers.length === 0) return res.status(400).json({ error: 'answers cannot be empty' });
+    if (answers.length > 25) return res.status(400).json({ error: 'answers too large (max 25)' });
+
+    const user = await User.findById(req.user.id).select('enrolledCourses xp currentStreak lastActivityDate isActive role badges');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
+    if (user.role !== 'student') return res.status(403).json({ error: 'Student access required' });
+
+    const enrolled = new Set((user.enrolledCourses || []).map((id) => String(id)));
+    const courseIds = Array.from(new Set(answers.map((a) => String(a?.courseId || '').trim()).filter(Boolean)));
+    if (courseIds.some((id) => !isObjectId(id))) return res.status(400).json({ error: 'Invalid courseId in answers' });
+    if (courseIds.some((id) => !enrolled.has(id))) return res.status(403).json({ error: 'All answers must reference enrolled courses' });
+
+    const courses = await Course.find({ _id: { $in: courseIds } }).select('title chapters');
+    const courseById = new Map(courses.map((c) => [String(c._id), c]));
+
+    let correct = 0;
+    const graded = [];
+
+    for (const a of answers) {
+      const cId = String(a?.courseId || '').trim();
+      const lessonId = String(a?.lessonId || '').trim();
+      const questionId = String(a?.questionId || '').trim();
+      const answerIndex = Number(a?.answerIndex);
+
+      const course = courseById.get(cId);
+      if (!course || !lessonId || !questionId) continue;
+
+      const found = findLesson(course, lessonId);
+      const questions = found?.lesson?.quiz?.questions || [];
+      const question = (questions || []).find((q) => String(q?._id) === questionId);
+      if (!question) continue;
+
+      const correctIndex = Number(question.correctIndex);
+      const isCorrect = Number.isFinite(answerIndex) && Number.isFinite(correctIndex) && answerIndex === correctIndex;
+      if (isCorrect) correct += 1;
+
+      graded.push({
+        courseId: cId,
+        courseTitle: course.title || 'Course',
+        lessonId,
+        lessonTitle: found?.lesson?.title || 'Quiz',
+        questionId,
+        prompt: String(question.prompt || ''),
+        options: Array.isArray(question.options) ? question.options.map((o) => String(o)) : [],
+        answerIndex: Number.isFinite(answerIndex) ? answerIndex : null,
+        correctIndex: Number.isFinite(correctIndex) ? correctIndex : null,
+        correct: isCorrect,
+        explanation: String(question.explanation || '')
+      });
+    }
+
+    const total = graded.length;
+    if (total === 0) return res.status(400).json({ error: 'No valid answers to grade' });
+
+    const scorePercent = Math.round((correct / total) * 100);
+    const xpPerCorrect = 2;
+    const bonus = scorePercent >= 80 && total >= 5 ? 10 : 0;
+    const xpAwarded = correct * xpPerCorrect + bonus;
+
+    user.xp = (user.xp || 0) + xpAwarded;
+
+    // Streak tracking: count once per day when a game is submitted.
+    const today = new Date().toDateString();
+    const lastActivity = user.lastActivityDate ? user.lastActivityDate.toDateString() : null;
+    if (lastActivity !== today) {
+      if (lastActivity === new Date(Date.now() - 86400000).toDateString()) user.currentStreak = (user.currentStreak || 0) + 1;
+      else user.currentStreak = 1;
+      user.lastActivityDate = new Date();
+    }
+
+    await user.save();
+
+    res.json({
+      correct,
+      total,
+      scorePercent,
+      xpAwarded,
+      xpTotal: user.xp || 0,
+      currentStreak: user.currentStreak || 0,
+      items: graded
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to submit quiz game' });
   }
 });
 

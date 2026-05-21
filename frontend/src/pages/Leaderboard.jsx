@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import StudentLayout from '../components/StudentLayout';
 import Card from '../components/ui/Card';
 import { Medal, Zap, Trophy } from 'lucide-react';
 
 export default function Leaderboard() {
+  const { t } = useTranslation();
   const [leaderboard, setLeaderboard] = useState([]);
   const [sortBy, setSortBy] = useState('xp');
   const [loading, setLoading] = useState(true);
@@ -61,10 +63,10 @@ export default function Leaderboard() {
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-2">
               <Trophy className="w-8 h-8 text-amber-500" />
-              <h1 className="text-4xl font-bold text-slate-900 dark:text-white">Leaderboard</h1>
+              <h1 className="text-4xl font-bold text-slate-900 dark:text-white">{t('leaderboard.title')}</h1>
             </div>
             <p className="text-slate-600 dark:text-slate-300">
-              See how you rank against other learners. Complete courses and earn XP to climb the ranks!
+              {t('leaderboard.subtitle')}
             </p>
           </div>
 
@@ -76,7 +78,7 @@ export default function Leaderboard() {
                   <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                     #{userStats.rank}
                   </div>
-                  <div className="text-sm text-slate-600 dark:text-slate-300">Your Rank</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">{t('leaderboard.yourRank')}</div>
                 </div>
                 <div>
                   <div className="flex items-center gap-1">
@@ -91,13 +93,13 @@ export default function Leaderboard() {
                   <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                     {userStats.badgeCount}
                   </div>
-                  <div className="text-sm text-slate-600 dark:text-slate-300">Badges</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">{t('leaderboard.badges')}</div>
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                     {userStats.percentile}%
                   </div>
-                  <div className="text-sm text-slate-600 dark:text-slate-300">Percentile</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">{t('leaderboard.percentile')}</div>
                 </div>
               </div>
             </Card>
@@ -123,7 +125,7 @@ export default function Leaderboard() {
                   : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
               }`}
             >
-              🔥 Streak
+              🔥 {t('leaderboard.streak')}
             </button>
             <button
               onClick={() => setSortBy('certificates')}
@@ -133,7 +135,7 @@ export default function Leaderboard() {
                   : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
               }`}
             >
-              🏆 Certificates
+              🏆 {t('leaderboard.certificates')}
             </button>
           </div>
 
@@ -141,7 +143,7 @@ export default function Leaderboard() {
           {loading ? (
             <Card>
               <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-                Loading leaderboard...
+                {t('leaderboard.loading')}
               </div>
             </Card>
           ) : error ? (
@@ -151,7 +153,7 @@ export default function Leaderboard() {
           ) : leaderboard.length === 0 ? (
             <Card>
               <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-                No users on leaderboard yet. Keep learning!
+                {t('leaderboard.empty')}
               </div>
             </Card>
           ) : (
@@ -204,14 +206,14 @@ export default function Leaderboard() {
                         {user.currentStreak > 0 && (
                           <div>
                             <div className="font-bold text-red-500">🔥 {user.currentStreak}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">Days</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{t('leaderboard.days')}</div>
                           </div>
                         )}
                         <div>
                           <div className="font-bold text-purple-600 dark:text-purple-400">
                             {user.certificateCount}
                           </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">Certs</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">{t('leaderboard.certs')}</div>
                         </div>
                       </div>
                     </div>

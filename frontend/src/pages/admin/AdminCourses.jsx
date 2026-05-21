@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Eye, GripVertical, Plus, Trash2 } from 'lucide-react';
 import adminApi from '../../lib/adminApi';
 import { uploadAdminImage, uploadAdminVideo } from '../../lib/uploads';
@@ -232,6 +232,8 @@ export default function AdminCourses() {
 
   const [page, setPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(1);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [loadError, setLoadError] = React.useState('');
 
   const [form, setForm] = React.useState(initialForm);
   const [editingId, setEditingId] = React.useState('');
@@ -257,28 +259,58 @@ export default function AdminCourses() {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [menuOpenId]);
 
-  async function load() {
-    const pending = filterApproval === 'pending' || filterApproval === 'requested';
-    const requestedOnly = filterApproval === 'requested';
-    const res = await adminApi.get('/courses', {
-      params: {
-        page,
-        search,
-        category: filterCategory || undefined,
-        level: filterLevel || undefined,
-        status: filterStatus || undefined,
-        pending: pending ? 1 : undefined,
-        requestedOnly: requestedOnly ? 1 : undefined
+  const load = React.useCallback(
+    async (overrides = {}) => {
+      const effectivePage = overrides.page ?? page;
+      const effectiveSearch = overrides.search ?? search;
+      const effectiveCategory = overrides.category ?? filterCategory;
+      const effectiveLevel = overrides.level ?? filterLevel;
+      const effectiveStatus = overrides.status ?? filterStatus;
+      const effectiveApproval = overrides.approval ?? filterApproval;
+
+      const pending = effectiveApproval === 'pending' || effectiveApproval === 'requested';
+      const requestedOnly = effectiveApproval === 'requested';
+
+      setIsLoading(true);
+      setLoadError('');
+      try {
+        const res = await adminApi.get('/courses', {
+          params: {
+            page: effectivePage,
+            search: effectiveSearch,
+            category: effectiveCategory || undefined,
+            level: effectiveLevel || undefined,
+            status: effectiveStatus || undefined,
+            pending: pending ? 1 : undefined,
+            requestedOnly: requestedOnly ? 1 : undefined
+          }
+        });
+        setItems(res.data.items || []);
+        setTotalPages(res.data.totalPages || 1);
+      } catch (err) {
+        const msg = err?.response?.data?.error || err?.message || 'Failed to load courses';
+        setLoadError(msg);
+        setItems([]);
+        setTotalPages(1);
+      } finally {
+        setIsLoading(false);
       }
-    });
-    setItems(res.data.items || []);
-    setTotalPages(res.data.totalPages || 1);
-  }
+    },
+    [filterApproval, filterCategory, filterLevel, filterStatus, page, search]
+  );
 
   React.useEffect(() => {
-    load().catch(() => null);
+    const delayMs = search ? 400 : 0;
+    const t = setTimeout(() => {
+      load().catch(() => null);
+    }, delayMs);
+    return () => clearTimeout(t);
+  }, [filterApproval, filterCategory, filterLevel, filterStatus, load, page, search]);
+
+  React.useEffect(() => {
+    if (page !== 1) setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [filterApproval, filterCategory, filterLevel, filterStatus, search]);
 
   React.useEffect(() => {
     adminApi.get('/skill-paths').then((res) => setSkillPaths(res.data || [])).catch(() => null);
@@ -510,7 +542,7 @@ export default function AdminCourses() {
   async function onSearch(e) {
     e.preventDefault();
     setPage(1);
-    await load();
+    await load({ page: 1 });
   }
 
   const skillPathTitle = skillPaths.find((sp) => sp._id === form.skillPath)?.title || '';
@@ -548,9 +580,9 @@ export default function AdminCourses() {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <div className="xl:col-span-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <div className="xl:col-span-5">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 xl:sticky xl:top-6 dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Course Management</p>
@@ -1049,26 +1081,41 @@ export default function AdminCourses() {
             )}
           </div>
         </div>
-        <div className="space-y-4 xl:col-span-2">
+        <div className="xl:col-span-7">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Courses</h3>
-              <p className="text-xs text-slate-500">Search + filters</p>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Posted Courses</p>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Search, filter, review</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {items.length} on this page
+                </span>
+                <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200 sm:inline">
+                  Page {page} / {totalPages}
+                </span>
+              </div>
             </div>
 
-            <form onSubmit={onSearch} className="space-y-3">
-              <input
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
-                placeholder="Search courses..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <form onSubmit={onSearch} className="grid grid-cols-1 gap-2 md:grid-cols-12">
+              <div className="md:col-span-12">
+                <input
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900/40"
+                  placeholder="Search by title, category, or instructor..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-1">
+              <div className="md:col-span-3">
                 <select
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800"
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
+                  disabled={isLoading}
+                  aria-label="Category"
                 >
                   <option value="">All categories</option>
                   {CATEGORY_OPTIONS.map((c) => (
@@ -1077,29 +1124,44 @@ export default function AdminCourses() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="md:col-span-3">
                 <select
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800"
                   value={filterLevel}
                   onChange={(e) => setFilterLevel(e.target.value)}
+                  disabled={isLoading}
+                  aria-label="Level"
                 >
                   <option value="">All levels</option>
                   <option value="Beginner">Beginner</option>
                   <option value="Intermediate">Intermediate</option>
                   <option value="Advanced">Advanced</option>
                 </select>
+              </div>
+
+              <div className="md:col-span-3">
                 <select
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
+                  disabled={isLoading}
+                  aria-label="Status"
                 >
                   <option value="">All status</option>
-                  <option value="draft">draft</option>
-                  <option value="published">published</option>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
                 </select>
+              </div>
+
+              <div className="md:col-span-3">
                 <select
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800"
                   value={filterApproval}
                   onChange={(e) => setFilterApproval(e.target.value)}
+                  disabled={isLoading}
+                  aria-label="Approval"
                 >
                   <option value="">All approvals</option>
                   <option value="pending">Pending approvals</option>
@@ -1107,22 +1169,25 @@ export default function AdminCourses() {
                 </select>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button className="flex-1 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900">
-                  Search
+              <div className="flex items-center gap-2 md:col-span-12">
+                <button
+                  className="flex-1 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Loading...' : 'Search'}
                 </button>
                 <button
                   type="button"
-                  onClick={async () => {
+                  onClick={() => {
                     setSearch('');
                     setFilterCategory('');
                     setFilterLevel('');
                     setFilterStatus('');
                     setFilterApproval('');
                     setPage(1);
-                    await load();
                   }}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
+                  disabled={isLoading}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
                 >
                   Reset
                 </button>
@@ -1130,13 +1195,18 @@ export default function AdminCourses() {
             </form>
           </section>
 
-          <section className="flex max-h-[72vh] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+          <section className="mt-4 flex max-h-[72vh] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Posted Courses</h3>
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{items.length} on this page</div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Results</h3>
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isLoading ? 'Loading...' : `${items.length} on this page`}</div>
             </div>
-            <div className="flex-1 overflow-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
+            {loadError ? (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                {loadError}
+              </div>
+            ) : null}
+            <div className="-mx-5 flex-1 overflow-auto border-t border-slate-200 dark:border-slate-800">
+              <table className="w-full min-w-[640px] text-left text-sm">
                 <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur dark:bg-slate-900/95">
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
                     <th className="w-[86px] px-2 py-3">Thumb</th>
@@ -1150,6 +1220,13 @@ export default function AdminCourses() {
                   </tr>
                 </thead>
                 <tbody>
+                  {isLoading ? (
+                    <tr>
+                      <td className="px-2 py-6 text-slate-500 dark:text-slate-400" colSpan={8}>
+                        Loading courses...
+                      </td>
+                    </tr>
+                  ) : null}
                   {items.map((item) => (
                     <tr key={item._id} className="border-b border-slate-100 dark:border-slate-800/70">
                       <td className="px-2 py-3">
@@ -1256,7 +1333,7 @@ export default function AdminCourses() {
                       </td>
                     </tr>
                   ))}
-                  {items.length === 0 && (
+                  {!isLoading && items.length === 0 && (
                     <tr>
                       <td className="px-2 py-6 text-slate-500" colSpan={8}>
                         No courses found.
@@ -1273,14 +1350,14 @@ export default function AdminCourses() {
               </p>
               <div className="flex gap-2">
                 <button
-                  disabled={page <= 1}
+                  disabled={isLoading || page <= 1}
                   onClick={() => setPage((p) => p - 1)}
                   className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-40 dark:border-slate-700"
                 >
                   Prev
                 </button>
                 <button
-                  disabled={page >= totalPages}
+                  disabled={isLoading || page >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
                   className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-40 dark:border-slate-700"
                 >

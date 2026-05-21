@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, PlusCircle, Users, FolderKanban, LibraryBig } from 'lucide-react';
+import { LayoutDashboard, BookOpen, PlusCircle, Users, FolderKanban, LibraryBig, MessagesSquare } from 'lucide-react';
 
 const links = [
   { to: '/instructor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -8,7 +8,8 @@ const links = [
   { to: '/instructor/courses/new', label: 'Create Course', icon: PlusCircle },
   { to: '/instructor/library', label: 'Course Library', icon: LibraryBig },
   { to: '/instructor/students', label: 'Student Progress', icon: Users },
-  { to: '/instructor/projects', label: 'Projects', icon: FolderKanban }
+  { to: '/instructor/projects', label: 'Projects', icon: FolderKanban },
+  { to: '/instructor/messages', label: 'Messages', icon: MessagesSquare }
 ];
 
 export default function InstructorSidebar({ open, onClose }) {
@@ -16,7 +17,7 @@ export default function InstructorSidebar({ open, onClose }) {
     <>
       {open && <div className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden" onClick={onClose} />}
       <aside
-        className={`fixed left-0 top-0 z-40 h-full w-72 transform border-r border-slate-200 bg-white p-4 transition dark:border-slate-800 dark:bg-slate-900 lg:translate-x-0 ${
+        className={`fixed left-0 top-0 z-40 h-full w-72 transform border-r border-slate-200/80 bg-white/80 p-4 backdrop-blur transition dark:border-slate-800/80 dark:bg-slate-900/60 lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

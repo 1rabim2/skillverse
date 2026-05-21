@@ -1,10 +1,12 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
 export default function ResetPassword() {
+  const { t } = useTranslation();
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token') || '';
   const [password, setPassword] = React.useState('');
@@ -34,8 +36,8 @@ export default function ResetPassword() {
     return (
       <div className="grid min-h-[70vh] place-items-center p-4">
         <Card className="w-full max-w-md p-6">
-          <div className="text-lg font-extrabold tracking-tight">Reset password</div>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">No token provided in the URL.</p>
+          <div className="text-lg font-extrabold tracking-tight">{t('passwordReset.resetTitle')}</div>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('passwordReset.missingToken')}</p>
         </Card>
       </div>
     );
@@ -44,17 +46,17 @@ export default function ResetPassword() {
   return (
     <div className="grid min-h-[70vh] place-items-center p-4">
       <Card className="w-full max-w-md p-6">
-        <div className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">Reset password</div>
-        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Choose a new password for your account.</div>
+        <div className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">{t('passwordReset.resetTitle')}</div>
+        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('passwordReset.resetSubtitle')}</div>
 
         <form onSubmit={submit} className="mt-5 space-y-4">
           <div className="space-y-2">
-            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">New password</div>
+            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('passwordReset.newPassword')}</div>
             <Input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required minLength={8} />
-            <div className="text-xs text-slate-500 dark:text-slate-400">Minimum 8 characters.</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{t('passwordReset.minChars')}</div>
           </div>
           <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? 'Updating…' : 'Reset password'}
+            {busy ? t('passwordReset.updating') : t('passwordReset.resetTitle')}
           </Button>
         </form>
 

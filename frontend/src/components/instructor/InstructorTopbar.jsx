@@ -31,11 +31,11 @@ export default function InstructorTopbar({ user, onToggleSidebar }) {
   }, []);
 
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 lg:px-6">
+    <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200/80 bg-white/70 px-4 py-3 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/40 lg:px-6">
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleSidebar}
-          className="rounded-md border border-slate-300 p-2 text-slate-700 dark:border-slate-700 dark:text-slate-200 lg:hidden"
+          className="rounded-xl border border-slate-300 bg-white p-2 text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 lg:hidden"
         >
           <Menu size={18} />
         </button>
@@ -49,14 +49,14 @@ export default function InstructorTopbar({ user, onToggleSidebar }) {
       <div className="flex items-center gap-2">
         <button
           onClick={toggleDarkMode}
-          className="rounded-md border border-slate-300 p-2 text-slate-700 dark:border-slate-700 dark:text-slate-200"
+          className="rounded-xl border border-slate-300 bg-white p-2 text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           title="Toggle theme"
         >
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
         <button
           onClick={logout}
-          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700"
+          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700"
         >
           <LogOut size={16} />
           Logout
@@ -65,4 +65,3 @@ export default function InstructorTopbar({ user, onToggleSidebar }) {
     </header>
   );
 }
-

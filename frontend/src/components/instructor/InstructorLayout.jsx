@@ -29,15 +29,14 @@ export default function InstructorLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+    <div className="min-h-screen">
       <InstructorSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="lg:pl-72">
         <InstructorTopbar user={user} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
-        <main className="p-4 lg:p-6">
+        <main className="mx-auto w-full max-w-7xl p-4 lg:p-6 2xl:max-w-[1440px]">
           <Outlet />
         </main>
       </div>
     </div>
   );
 }
-

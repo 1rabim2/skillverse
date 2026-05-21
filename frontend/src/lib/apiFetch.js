@@ -1,4 +1,5 @@
 import { API_BASE, ADMIN_API_BASE, getCSRFToken } from './apiBase';
+import i18n from '../i18n';
 
 function joinUrl(base, path) {
   const b = String(base || '').replace(/\/+$/, '');
@@ -22,6 +23,9 @@ export async function apiFetch(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const headers = new Headers(options.headers || {});
 
+  // Tell the backend which language the UI is using (useful for future localized responses).
+  if (!headers.has('Accept-Language')) headers.set('Accept-Language', String(i18n.language || 'en'));
+
   await withCsrfIfNeeded(method, headers);
 
   return fetch(url, {
@@ -36,6 +40,8 @@ export async function adminFetch(path, options = {}) {
   const url = joinUrl(ADMIN_API_BASE, path);
   const method = String(options.method || 'GET').toUpperCase();
   const headers = new Headers(options.headers || {});
+
+  if (!headers.has('Accept-Language')) headers.set('Accept-Language', String(i18n.language || 'en'));
 
   await withCsrfIfNeeded(method, headers);
 

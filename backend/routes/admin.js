@@ -1082,7 +1082,7 @@ router.get('/settings/localization', adminAuth, async (req, res) => {
   try {
     const setting = await AdminSetting.findOne({ key: 'localization' });
     const fallback = {
-      defaultLanguage: 'en',
+      defaultLanguage: 'ne',
       supportedLanguages: ['en', 'ne'],
       labels: { en: { welcome: 'Welcome' }, ne: { welcome: 'Swagat cha' } }
     };

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -28,6 +29,10 @@ function Segmented({ value, onChange, options }) {
 }
 
 export default function Login() {
+  // Auth screens stay English-only (no language switcher needed here).
+  // Use a fixed translator so we don't mutate the user's saved language preference.
+  const { i18n } = useTranslation();
+  const t = useMemo(() => i18n.getFixedT('en'), [i18n]);
   const location = useLocation();
   const [mode, setMode] = useState(location.pathname === '/signup' ? 'signup' : 'login'); // login | signup
   const [authMethod, setAuthMethod] = useState('email'); // email | google
@@ -37,6 +42,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [out, setOut] = useState('');
   const [isError, setIsError] = useState(false);
+  // Legacy verification UI (email verification is disabled in the backend).
   const [needsVerify, setNeedsVerify] = useState(false);
   const [resendOut, setResendOut] = useState('');
   const [resendBusy, setResendBusy] = useState(false);
@@ -62,52 +68,14 @@ export default function Login() {
   }
 
   async function resendVerification() {
-    const normalizedEmail = email.trim();
-    if (!normalizedEmail) return;
-    try {
-      setResendBusy(true);
-      setResendOut('');
-      const res = await apiFetch('/auth/resend-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to resend verification email');
-      setResendOut(data?.message || 'Verification code sent (if the account exists and is unverified).');
-    } catch (err) {
-      setResendOut(err.message || 'Failed to resend verification email');
-    } finally {
-      setResendBusy(false);
-    }
+    setResendOut('');
+    setIsError(true);
+    setOut(t('auth.emailVerificationDisabled'));
   }
 
   async function verifyCode() {
-    const normalizedEmail = email.trim();
-    if (!normalizedEmail || !verificationCode) return;
-    try {
-      setVerifying(true);
-      setOut('');
-      const res = await apiFetch('/auth/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail, code: verificationCode })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setOut('Account verified! You can now log in.');
-        setNeedsVerify(false);
-        setVerificationCode('');
-      } else {
-        setIsError(true);
-        setOut(data.error || 'Verification failed');
-      }
-    } catch (err) {
-      setIsError(true);
-      setOut(`Network error: ${err.message}`);
-    } finally {
-      setVerifying(false);
-    }
+    setIsError(true);
+    setOut(t('auth.emailVerificationDisabled'));
   }
 
   useEffect(() => {
@@ -131,7 +99,7 @@ export default function Login() {
       setOut('');
       setNeedsVerify(false);
       setResendOut('');
-      setGoogleStatus('Signing in with Google…');
+      setGoogleStatus(t('auth.googleSigningIn'));
 
 
       const res = await apiFetch('/auth/google', {
@@ -143,22 +111,13 @@ export default function Login() {
 
       if (res.ok) {
         setIsError(false);
-        if (res.status === 201) {
-          // New account created - needs email verification
-          setOut('Account created! Please check your email to verify your account.');
-          setNeedsVerify(true);
-        } else {
-          // Existing account - logged in
-          const nextRole = data?.user?.role || 'student';
-          if (nextRole === 'admin') window.location.href = '/admin/dashboard';
-          else if (nextRole === 'instructor') window.location.href = '/instructor/dashboard';
-          else window.location.href = '/dashboard';
-        }
+        const nextRole = data?.user?.role || 'student';
+        if (nextRole === 'admin') window.location.href = '/admin/dashboard';
+        else if (nextRole === 'instructor') window.location.href = '/instructor/dashboard';
+        else window.location.href = '/dashboard';
         return;
       }
 
-      const verifyRequired = res.status === 403 && String(data?.error || '').toLowerCase().includes('verify');
-      if (verifyRequired) setNeedsVerify(true);
       setIsError(true);
       setOut(data.error || JSON.stringify(data));
     } catch (err) {
@@ -189,7 +148,7 @@ export default function Login() {
               const cred = resp && resp.credential ? resp.credential : '';
               if (!cred) {
                 setIsError(true);
-                setOut('Google sign-in failed: missing credential');
+                setOut(t('auth.googleMissingCredential'));
                 return;
               }
               onGoogleCredential(cred);
@@ -237,8 +196,6 @@ export default function Login() {
     try {
       setIsError(false);
       setOut('');
-      setNeedsVerify(false);
-      setResendOut('');
 
       const res = await apiFetch(`/auth/${endpoint}`, {
         method: 'POST',
@@ -249,24 +206,12 @@ export default function Login() {
 
       if (res.ok) {
         setIsError(false);
-        if (mode === 'signup') {
-          // Registration successful - email verification required
-          setOut('Account created! Check your email for the verification code.');
-          setNeedsVerify(true);
-          setName('');
-          setEmail('');
-          setPassword('');
-        } else {
-          // Login successful
-          const nextRole = data?.user?.role || 'student';
-          if (nextRole === 'admin') window.location.href = '/admin/dashboard';
-          else if (nextRole === 'instructor') window.location.href = '/instructor/dashboard';
-          else window.location.href = '/dashboard';
-        }
+        const nextRole = data?.user?.role || 'student';
+        if (nextRole === 'admin') window.location.href = '/admin/dashboard';
+        else if (nextRole === 'instructor') window.location.href = '/instructor/dashboard';
+        else window.location.href = '/dashboard';
       } else {
         setIsError(true);
-        const verifyRequired = res.status === 403 && String(data?.error || '').toLowerCase().includes('verify');
-        if (verifyRequired) setNeedsVerify(true);
         // Handle specific error messages
         if (data.details && Array.isArray(data.details)) {
           setOut(data.details.join('\n'));
@@ -287,11 +232,11 @@ export default function Login() {
     }
   }
 
-  const title = mode === 'login' ? 'Welcome back' : 'Create your account';
   const subtitle =
     mode === 'login'
-      ? 'Sign in to continue your learning.'
-      : 'Create an account to track progress, earn badges, and collect certificates.';
+      ? t('auth.loginSubtitle')
+      : t('auth.signupSubtitle');
+  const titleText = mode === 'login' ? t('auth.welcomeBackTitle') : t('auth.createAccountTitle');
 
   return (
     <div className="min-h-screen bg-slate-100 px-4 py-10 dark:bg-slate-950">
@@ -319,7 +264,7 @@ export default function Login() {
           <div className="p-6 sm:p-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{title}</div>
+                <div className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{titleText}</div>
                 <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{subtitle}</div>
               </div>
               <Segmented
@@ -329,8 +274,8 @@ export default function Login() {
                   clearForm();
                 }}
                 options={[
-                  { value: 'login', label: 'Login' },
-                  { value: 'signup', label: 'Sign up' }
+                  { value: 'login', label: t('auth.login') },
+                  { value: 'signup', label: t('auth.signup') }
                 ]}
               />
             </div>
@@ -346,7 +291,7 @@ export default function Login() {
                   }}
                   options={[
                     { value: 'google', label: 'Google' },
-                    { value: 'email', label: 'Email' }
+                    { value: 'email', label: t('auth.email') }
                   ]}
                 />
               </div>
@@ -356,33 +301,41 @@ export default function Login() {
               {mode === 'signup' ? (
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">Register as</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">Choose Student or Instructor</div>
+                    <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('auth.registerAs')}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{t('auth.chooseRole')}</div>
                   </div>
                   <Segmented
                     value={role}
                     onChange={setRole}
                     options={[
-                      { value: 'student', label: 'Student' },
-                      { value: 'instructor', label: 'Instructor' }
+                      { value: 'student', label: t('auth.student') },
+                      { value: 'instructor', label: t('auth.instructor') }
                     ]}
                   />
                 </div>
               ) : null}
               {authMethod === 'google' && googleClientId ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Continue with</div>
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('auth.continueWith')}</div>
                   <div ref={googleBtnRef} />
                   {googleStatus ? <div className="text-xs text-slate-500 dark:text-slate-400">{googleStatus}</div> : null}
                   <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Prefer email/password? Switch to <button type="button" className="font-semibold text-indigo-600 dark:text-indigo-400" onClick={() => setAuthMethod('email')}>Email</button>.
+                    {t('auth.preferEmailPassword')}{' '}
+                    <button
+                      type="button"
+                      className="font-semibold text-indigo-600 dark:text-indigo-400"
+                      onClick={() => setAuthMethod('email')}
+                    >
+                      {t('auth.switchToEmail')}
+                    </button>
+                    .
                   </div>
                 </div>
               ) : null}
 
               {authMethod === 'email' && mode === 'signup' ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Name</div>
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('auth.name')}</div>
                   <Input value={name} onChange={(e) => setName(e.target.value)} type="text" required />
                 </div>
               ) : null}
@@ -390,11 +343,11 @@ export default function Login() {
               {authMethod === 'email' ? (
                 <>
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Email</div>
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('auth.email')}</div>
                     <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
                   </div>
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Password</div>
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('auth.password')}</div>
                     <Input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
                   </div>
 
@@ -402,11 +355,11 @@ export default function Login() {
                     <div className="pt-2">
                       <div className="flex items-center gap-3">
                         <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-                        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">or</div>
+                        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{t('auth.or')}</div>
                         <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
                       </div>
                       <div className="mt-3 space-y-2">
-                        <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Continue with</div>
+                        <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('auth.continueWith')}</div>
                         <div ref={googleBtnRef} />
                         {googleStatus ? <div className="text-xs text-slate-500 dark:text-slate-400">{googleStatus}</div> : null}
                       </div>
@@ -414,7 +367,7 @@ export default function Login() {
                   ) : null}
 
                   <Button className="w-full" type="submit" variant="primary">
-                    {mode === 'login' ? 'Login' : 'Create account'}
+                    {mode === 'login' ? t('auth.login') : t('auth.createAccount')}
                   </Button>
                 </>
               ) : null}
@@ -422,7 +375,7 @@ export default function Login() {
 
             <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
               <a href="/forgot-password" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
-                Forgot password?
+                {t('auth.forgotPassword')}
               </a>
               <Button
                 variant="outline"
@@ -431,7 +384,7 @@ export default function Login() {
                   clearForm();
                 }}
               >
-                {mode === 'login' ? 'Create account' : 'Back to login'}
+                {mode === 'login' ? t('auth.createAccount') : t('auth.backToLogin')}
               </Button>
             </div>
 

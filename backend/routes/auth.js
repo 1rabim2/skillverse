@@ -110,15 +110,13 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'role must be student or instructor' });
     }
 
-    // Don't auto-verify - require email verification
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
     const user = new User({ 
       name, 
       email: normalizedEmail, 
       password: hash, 
       role: requestedRole,
-      isVerified: false,
-      verificationToken: verificationCode
+      isVerified: true,
+      verificationToken: undefined
     });
     await user.save();
 
@@ -130,20 +128,10 @@ router.post('/register', authLimiter, async (req, res) => {
       meta: { userId: String(user._id) }
     }).catch(() => null);
 
-    // Send verification email
-    const { sendEmail } = require('../utils/email');
-    await sendEmail({
-      to: user.email,
-      subject: 'Verify your Skillverse account',
-      text: `Your verification code is: ${verificationCode}`,
-      html: `<p>Your verification code is: <strong>${verificationCode}</strong></p>`
-    }).catch(() => null);
-
-    // Don't log user in automatically - require email verification first
-    res.status(201).json({ 
-      message: 'Account created. Please check your email to verify your account.',
-      user: { id: user._id, email: user.email, name: user.name }
-    });
+    // Email verification is disabled: log in immediately after signup.
+    const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
+    setAuthCookie(res, token);
+    res.status(201).json({ token, user: { id: user._id, email: user.email, name: user.name, role: user.role || 'student' } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -183,7 +171,6 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    if (!user.isVerified) return res.status(403).json({ error: 'Please verify your email before logging in' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
 
     const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
@@ -237,20 +224,18 @@ router.post('/google', authLimiter, async (req, res) => {
 
     if (!user) {
       // Create a new account tied to Google
-      // User must verify their email, even with Google OAuth
       const randomPassword = crypto.randomBytes(32).toString('hex');
       const salt = await bcrypt.genSalt(10);
       const hash = await bcrypt.hash(randomPassword, salt);
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
       user = new User({
         name,
         email,
         password: hash,
-        isVerified: false, // SECURITY FIX: Require email verification even with Google
+        isVerified: true,
         role: requestedRole,
         googleSub,
-        verificationToken: verificationCode
+        verificationToken: undefined
       });
 
       await user.save();
@@ -264,19 +249,9 @@ router.post('/google', authLimiter, async (req, res) => {
         meta: { userId: String(user._id), provider: 'google' }
       }).catch(() => null);
 
-      // Send verification email for Google OAuth users
-      const { sendEmail } = require('../utils/email');
-      await sendEmail({
-        to: user.email,
-        subject: 'Verify your Skillverse account',
-        text: `Your verification code is: ${verificationCode}`,
-        html: `<p>Your verification code is: <strong>${verificationCode}</strong></p>`
-      }).catch(() => null);
-
-      return res.status(201).json({
-        message: 'Account created. Please check your email to verify your account.',
-        user: { id: user._id, email: user.email, name: user.name }
-      });
+      const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
+      setAuthCookie(res, token);
+      return res.status(201).json({ token, user: { id: user._id, email: user.email, name: user.name, role: user.role || 'student' } });
     } else {
       if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
       // If they previously signed up via email but are now using Google, remember the googleSub.
@@ -285,12 +260,9 @@ router.post('/google', authLimiter, async (req, res) => {
       }
       if (!user.googleSub) user.googleSub = googleSub;
       if (!user.name && name) user.name = name;
+      if (!user.isVerified) user.isVerified = true;
+      if (user.verificationToken) user.verificationToken = undefined;
       await user.save();
-    }
-
-    // User exists and is verified
-    if (!user.isVerified) {
-      return res.status(403).json({ error: 'Please verify your email before logging in' });
     }
 
     const token = jwt.sign({ id: user._id, email: user.email, role: user.role || 'student' }, JWT_SECRET, { expiresIn: '7d' });
@@ -306,76 +278,18 @@ router.post('/google', authLimiter, async (req, res) => {
 });
 
 // Verify email with code
-router.post('/verify', async (req, res) => {
-  try {
-    const { email, code } = req.body;
-    const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail || !code) return res.status(400).json({ error: 'Email and code required' });
-
-    const user = await User.findOne(emailFilter(normalizedEmail));
-    if (!user) return res.status(400).json({ error: 'User not found' });
-    if (user.isVerified) return res.status(400).json({ error: 'Account already verified' });
-    if (user.verificationToken !== code) return res.status(400).json({ error: 'Invalid code' });
-
-    user.isVerified = true;
-    user.verificationToken = undefined;
-    await user.save();
-
-    res.json({ message: 'Email verified. You can now log in.' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
+router.post('/verify', async (_req, res) => {
+  return res.status(410).json({ error: 'Email verification is disabled' });
 });
 
 // Verify email with token (for backward compatibility)
-router.get('/verify', async (req, res) => {
-  try {
-    const { token } = req.query;
-    if (!token) return res.status(400).json({ error: 'Token required' });
-
-    const user = await User.findOne({ verificationToken: token });
-    if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
-    if (user.isVerified) return res.status(400).json({ error: 'Account already verified' });
-
-    user.isVerified = true;
-    user.verificationToken = undefined;
-    await user.save();
-
-    res.json({ message: 'Email verified. You can now log in.' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
+router.get('/verify', async (_req, res) => {
+  return res.status(410).json({ error: 'Email verification is disabled' });
 });
 
 // Resend verification
 router.post('/resend-verification', authLimiter, async (req, res) => {
-  try {
-    const { email } = req.body;
-    const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail) return res.status(400).json({ error: 'Email required' });
-
-    const user = await User.findOne(emailFilter(normalizedEmail));
-    // Always return a generic message to avoid revealing which emails exist
-    if (!user || user.isVerified) return res.status(200).json({ message: 'If that email exists and is unverified, a verification link was sent' });
-
-    if (!user.verificationToken) user.verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
-    await user.save();
-
-    const { sendEmail } = require('../utils/email');
-    await sendEmail({
-      to: user.email,
-      subject: 'Verify your Skillverse account',
-      text: `Your verification code is: ${user.verificationToken}`,
-      html: `<p>Your verification code is: <strong>${user.verificationToken}</strong></p>`
-    });
-
-    return res.status(200).json({ message: 'If that email exists and is unverified, a verification link was sent' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
+  return res.status(410).json({ error: 'Email verification is disabled' });
 });
 
 // Forgot password - WITH RATE LIMITING
@@ -390,22 +304,6 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
     if (!user) return res.status(200).json({ message: 'If that email exists, an appropriate link was sent' });
 
     const { sendEmail } = require('../utils/email');
-
-    // If the account is not verified, send verification link instead of reset link
-    if (!user.isVerified) {
-      if (!user.verificationToken) user.verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
-      await user.save();
-      await sendEmail({
-        to: user.email,
-        subject: 'Verify your Skillverse account',
-        text: `Your verification code is: ${user.verificationToken}`,
-        html: `<p>Your verification code is: <strong>${user.verificationToken}</strong></p>`
-      });
-
-      const resp = { message: 'If that email exists and is unverified, a verification code was sent' };
-      if (process.env.NODE_ENV !== 'production') resp.verificationCode = user.verificationToken;
-      return res.status(200).json(resp);
-    }
 
     // Otherwise send password reset link
     const resetToken = require('crypto').randomBytes(20).toString('hex');

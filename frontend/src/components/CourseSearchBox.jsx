@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import Input from './ui/Input';
 
@@ -19,9 +20,10 @@ export default function CourseSearchBox({
   onChange,
   onSubmit,
   onPickCourse,
-  placeholder = 'Search courses...',
+  placeholder = '',
   className = ''
 }) {
+  const { t } = useTranslation();
   const rootRef = React.useRef(null);
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -118,6 +120,7 @@ export default function CourseSearchBox({
 
   const q = String(value || '').trim();
   const show = open && (q.length >= 1);
+  const effectivePlaceholder = placeholder || t('searchBox.placeholderCourses');
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
@@ -130,7 +133,7 @@ export default function CourseSearchBox({
           onChange={(e) => onChange?.(e.target.value)}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder={placeholder}
+          placeholder={effectivePlaceholder}
           className="pl-10"
         />
         {busy ? (
@@ -148,18 +151,18 @@ export default function CourseSearchBox({
             onClick={submitNow}
           >
             <span className="font-semibold text-slate-900 dark:text-white">
-              Search for “{q || '…'}”
+              {t('searchBox.searchFor', { query: q || '…' })}
             </span>
-            <span className="text-xs text-slate-500">Enter</span>
+            <span className="text-xs text-slate-500">{t('searchBox.enter')}</span>
           </button>
 
           {q.length < 2 ? (
             <div className="border-t border-slate-100 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
-              Type at least 2 characters for suggestions.
+              {t('searchBox.typeTwoChars')}
             </div>
           ) : items.length === 0 && !busy ? (
             <div className="border-t border-slate-100 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
-              No matching courses found.
+              {t('searchBox.noMatches')}
             </div>
           ) : (
             <div className="border-t border-slate-100 dark:border-slate-800">
@@ -178,7 +181,7 @@ export default function CourseSearchBox({
                     onMouseEnter={() => setActive(idx)}
                     onClick={() => pickCourse(id)}
                   >
-                    <div className="text-sm font-semibold text-slate-900 dark:text-white">{c.title || 'Untitled course'}</div>
+                    <div className="text-sm font-semibold text-slate-900 dark:text-white">{c.title || t('searchBox.untitledCourse')}</div>
                     <div className="text-xs text-slate-500 dark:text-slate-400">
                       {(c.level || 'Beginner') + ' • ' + (c.category || 'General')}
                       {c.skillPath?.title ? ` • ${c.skillPath.title}` : ''}

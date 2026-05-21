@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -13,7 +14,9 @@ import Community from './pages/Community';
 import Portfolio from './pages/Portfolio';
 import Profile from './pages/Profile';
 import Leaderboard from './pages/Leaderboard';
+import QuizGame from './pages/QuizGame';
 import CourseDetail from './pages/CourseDetail';
+import CourseChat from './pages/CourseChat';
 import Certificates from './pages/Certificates';
 import MyProjects from './pages/MyProjects';
 import Subscribe from './pages/Subscribe';
@@ -40,10 +43,12 @@ import InstructorEditCourse from './pages/instructor/InstructorEditCourse';
 import InstructorStudents from './pages/instructor/InstructorStudents';
 import InstructorLibrary from './pages/instructor/InstructorLibrary';
 import InstructorProjects from './pages/instructor/InstructorProjects';
+import InstructorMessages from './pages/instructor/InstructorMessages';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
@@ -65,6 +70,14 @@ export default function App() {
           <Route path="/skill-paths/:id" element={<SkillPathDetail />} />
           <Route path="/courses" element={<Courses />} />
           <Route path="/courses/:id" element={<CourseDetail />} />
+          <Route
+            path="/courses/:id/chat"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <CourseChat />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/community" element={<Community />} />
           <Route
             path="/portfolio"
@@ -114,6 +127,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/game/quiz"
+            element={
+              <ProtectedRoute allow={['student']}>
+                <QuizGame />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/leaderboard" element={<Leaderboard />} />
         </Route>
 
@@ -133,6 +154,7 @@ export default function App() {
           <Route path="library" element={<InstructorLibrary />} />
           <Route path="students" element={<InstructorStudents />} />
           <Route path="projects" element={<InstructorProjects />} />
+          <Route path="messages" element={<InstructorMessages />} />
         </Route>
 
         <Route path="/admin/login" element={<AdminLogin />} />
@@ -158,6 +180,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

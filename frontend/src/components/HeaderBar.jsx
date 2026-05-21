@@ -1,8 +1,10 @@
 import React from 'react';
 import { Bell, Menu, X } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import CourseSearchBox from './CourseSearchBox';
+import i18n, { getLocaleForLanguage, persistLanguage, SUPPORTED_LANGUAGES } from '../i18n';
 
 function NavItem({ to, children, onClick }) {
   return (
@@ -24,6 +26,7 @@ function NavItem({ to, children, onClick }) {
 }
 
 export default function HeaderBar({ user, onLogout }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const initials = (user?.name || 'SV')
@@ -103,6 +106,16 @@ export default function HeaderBar({ user, onLogout }) {
     }
   }
 
+  async function setLanguage(nextLang) {
+    const lang = String(nextLang || '').trim().toLowerCase();
+    if (!SUPPORTED_LANGUAGES.includes(lang)) return;
+    persistLanguage(lang);
+    await i18n.changeLanguage(lang);
+  }
+
+  const currentLang = String(i18n.language || 'en').toLowerCase();
+  const currentLocale = getLocaleForLanguage(currentLang);
+
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 lg:px-6 2xl:max-w-[1440px]">
@@ -112,7 +125,7 @@ export default function HeaderBar({ user, onLogout }) {
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800 md:hidden"
               onClick={() => setMobileOpen((v) => !v)}
-              title="Menu"
+              title={t('header.menu')}
             >
               {mobileOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
@@ -123,7 +136,7 @@ export default function HeaderBar({ user, onLogout }) {
                   <CourseSearchBox
                     value={search}
                     onChange={setSearch}
-                    placeholder="Search courses..."
+                    placeholder={t('header.searchCoursesPlaceholder')}
                     onSubmit={(q) => {
                       const next = String(q || '').trim();
                       setMobileOpen(false);
@@ -139,29 +152,45 @@ export default function HeaderBar({ user, onLogout }) {
 
                 <div className="space-y-1 p-2">
                   <NavItem to="/dashboard" onClick={() => setMobileOpen(false)}>
-                    Dashboard
+                    {t('nav.dashboard')}
                   </NavItem>
                   <NavItem to="/skill-paths" onClick={() => setMobileOpen(false)}>
-                    Paths
+                    {t('nav.paths')}
                   </NavItem>
                   <NavItem to="/courses" onClick={() => setMobileOpen(false)}>
-                    Courses
+                    {t('nav.courses')}
                   </NavItem>
                   <NavItem to="/community" onClick={() => setMobileOpen(false)}>
-                    Community
+                    {t('nav.community')}
                   </NavItem>
                   <NavItem to="/portfolio" onClick={() => setMobileOpen(false)}>
-                    Portfolio
+                    {t('nav.portfolio')}
+                  </NavItem>
+                  <NavItem to="/game/quiz" onClick={() => setMobileOpen(false)}>
+                    {t('nav.game')}
                   </NavItem>
                   <NavItem to="/projects" onClick={() => setMobileOpen(false)}>
-                    Projects
+                    {t('nav.projects')}
                   </NavItem>
                   <NavItem to="/profile" onClick={() => setMobileOpen(false)}>
-                    Profile
+                    {t('nav.profile')}
                   </NavItem>
                   <NavItem to="/subscribe" onClick={() => setMobileOpen(false)}>
-                    Subscribe
+                    {t('nav.subscribe')}
                   </NavItem>
+                  <div className="pt-1">
+                    <label className="block px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      {t('header.language')}
+                    </label>
+                    <select
+                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      value={currentLang}
+                      onChange={(e) => setLanguage(e.target.value)}
+                    >
+                      <option value="en">English</option>
+                      <option value="ne">नेपाली</option>
+                    </select>
+                  </div>
                   <button
                     type="button"
                     className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/30"
@@ -170,7 +199,7 @@ export default function HeaderBar({ user, onLogout }) {
                       onLogout();
                     }}
                   >
-                    Logout
+                    {t('header.logout')}
                   </button>
                 </div>
               </div>
@@ -183,14 +212,15 @@ export default function HeaderBar({ user, onLogout }) {
         </div>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
-          <NavItem to="/dashboard">Dashboard</NavItem>
-          <NavItem to="/skill-paths">Paths</NavItem>
-          <NavItem to="/courses">Courses</NavItem>
-          <NavItem to="/community">Community</NavItem>
-          <NavItem to="/portfolio">Portfolio</NavItem>
-          <NavItem to="/projects">Projects</NavItem>
-          <NavItem to="/profile">Profile</NavItem>
-          <NavItem to="/subscribe">Subscribe</NavItem>
+          <NavItem to="/dashboard">{t('nav.dashboard')}</NavItem>
+          <NavItem to="/skill-paths">{t('nav.paths')}</NavItem>
+          <NavItem to="/courses">{t('nav.courses')}</NavItem>
+          <NavItem to="/community">{t('nav.community')}</NavItem>
+          <NavItem to="/portfolio">{t('nav.portfolio')}</NavItem>
+          <NavItem to="/game/quiz">{t('nav.game')}</NavItem>
+          <NavItem to="/projects">{t('nav.projects')}</NavItem>
+          <NavItem to="/profile">{t('nav.profile')}</NavItem>
+          <NavItem to="/subscribe">{t('nav.subscribe')}</NavItem>
         </nav>
 
         <div className="hidden w-[420px] max-w-[42vw] md:block">
@@ -207,11 +237,22 @@ export default function HeaderBar({ user, onLogout }) {
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="hidden md:block">
+            <select
+              aria-label={t('header.language')}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+              value={currentLang}
+              onChange={(e) => setLanguage(e.target.value)}
+            >
+              <option value="en">EN</option>
+              <option value="ne">ने</option>
+            </select>
+          </div>
           <div className="relative" ref={notifRef}>
             <button
               type="button"
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-              title="Notifications"
+              title={t('header.notifications')}
               onClick={async () => {
                 const next = !notifOpen;
                 setNotifOpen(next);
@@ -229,13 +270,13 @@ export default function HeaderBar({ user, onLogout }) {
             {notifOpen && (
               <div className="absolute right-0 top-12 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-                  <div className="text-sm font-extrabold">Notifications</div>
+                  <div className="text-sm font-extrabold">{t('header.notifications')}</div>
                   <button
                     type="button"
                     className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                     onClick={markAllRead}
                   >
-                    Mark all read
+                    {t('header.markAllRead')}
                   </button>
                 </div>
                 <div className="max-h-[360px] overflow-auto">
@@ -249,11 +290,11 @@ export default function HeaderBar({ user, onLogout }) {
                     >
                       <button type="button" className="w-full text-left" onClick={() => markRead(n._id)}>
                         <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm font-extrabold">{n.title || 'Notification'}</div>
+                          <div className="text-sm font-extrabold">{n.title || t('header.notificationFallbackTitle')}</div>
                           {!n.readAt && <span className="mt-1 inline-block h-2 w-2 rounded-full bg-indigo-600" />}
                         </div>
                         <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{n.message}</div>
-                        <div className="mt-2 text-xs text-slate-400">{new Date(n.createdAt).toLocaleString()}</div>
+                        <div className="mt-2 text-xs text-slate-400">{new Date(n.createdAt).toLocaleString(currentLocale)}</div>
                       </button>
                       {n.readAt && (
                         <div className="mt-2 flex justify-end">
@@ -262,14 +303,14 @@ export default function HeaderBar({ user, onLogout }) {
                             className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                             onClick={() => markUnread(n._id)}
                           >
-                            Mark unread
+                            {t('header.markUnread')}
                           </button>
                         </div>
                       )}
                     </div>
                   ))}
                   {items.length === 0 && (
-                    <div className="p-4 text-sm text-slate-600 dark:text-slate-300">No notifications yet.</div>
+                    <div className="p-4 text-sm text-slate-600 dark:text-slate-300">{t('header.noNotifications')}</div>
                   )}
                 </div>
               </div>
@@ -280,7 +321,7 @@ export default function HeaderBar({ user, onLogout }) {
             <button
               type="button"
               className="inline-flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-left shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
-              title="Account"
+              title={t('header.account')}
               onClick={() => setUserOpen((v) => !v)}
             >
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-xs font-extrabold text-white">
@@ -306,7 +347,7 @@ export default function HeaderBar({ user, onLogout }) {
                     onClick={() => setUserOpen(false)}
                     className="block rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
-                    Profile
+                    {t('nav.profile')}
                   </NavLink>
                   <button
                     type="button"
@@ -316,7 +357,7 @@ export default function HeaderBar({ user, onLogout }) {
                       onLogout();
                     }}
                   >
-                    Logout
+                    {t('header.logout')}
                   </button>
                 </div>
               </div>

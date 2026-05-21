@@ -29,7 +29,7 @@ export default function AdminSidebar({ open, onClose }) {
     <>
       {open && <div className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden" onClick={onClose} />}
       <aside
-        className={`fixed left-0 top-0 z-40 h-full w-72 transform border-r border-slate-200 bg-white p-4 transition dark:border-slate-800 dark:bg-slate-900 lg:translate-x-0 ${
+        className={`fixed left-0 top-0 z-40 h-full w-72 transform border-r border-slate-200/80 bg-white/80 p-4 backdrop-blur transition dark:border-slate-800/80 dark:bg-slate-900/60 lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

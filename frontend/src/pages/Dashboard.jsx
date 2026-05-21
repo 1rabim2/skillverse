@@ -1,30 +1,33 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import ProgressOverview from '../components/ProgressOverview';
 import CourseCarousel from '../components/CourseCarousel';
 import Achievements from '../components/Achievements';
 import MotivationBanner from '../components/MotivationBanner';
+import MentorsList from '../components/MentorsList';
 import { adminFetch, apiFetch } from '../lib/apiFetch';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 
 function AccessMessage({ isAdminOnly, onReset }) {
+  const { t } = useTranslation();
   return (
     <div className="grid min-h-[70vh] place-items-center p-4">
       <Card className="w-full max-w-xl p-6">
-        <div className="text-lg font-extrabold tracking-tight">Dashboard Access</div>
+        <div className="text-lg font-extrabold tracking-tight">{t('dashboard.accessTitle')}</div>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
           {isAdminOnly
-            ? 'You are logged in as admin. The student dashboard requires a student session.'
-            : 'You are not logged in as a student. Sign in to access your dashboard.'}
+            ? t('dashboard.adminOnlyMsg')
+            : t('dashboard.notStudentMsg')}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {!isAdminOnly ? (
             <Button variant="primary" onClick={() => (window.location.href = '/login')}>
-              Go to student login
+              {t('dashboard.goStudentLogin')}
             </Button>
           ) : (
             <Button variant="primary" onClick={() => (window.location.href = '/admin/dashboard')}>
-              Go to admin dashboard
+              {t('dashboard.goAdminDashboard')}
             </Button>
           )}
           <Button
@@ -33,7 +36,7 @@ function AccessMessage({ isAdminOnly, onReset }) {
               onReset();
             }}
           >
-            Reset session
+            {t('dashboard.resetSession')}
           </Button>
         </div>
       </Card>
@@ -42,6 +45,7 @@ function AccessMessage({ isAdminOnly, onReset }) {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
@@ -111,7 +115,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <Card className="p-5">
-        <div className="text-sm text-slate-600 dark:text-slate-300">Loading dashboard...</div>
+        <div className="text-sm text-slate-600 dark:text-slate-300">{t('dashboard.loading')}</div>
       </Card>
     );
   }
@@ -119,17 +123,17 @@ export default function Dashboard() {
   if (error) {
     return (
       <Card className="p-5">
-        <div className="text-sm font-semibold text-slate-900 dark:text-white">Could not load dashboard</div>
+        <div className="text-sm font-semibold text-slate-900 dark:text-white">{t('dashboard.couldNotLoad')}</div>
         <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{error}</div>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button variant="primary" onClick={() => window.location.reload()}>
-            Retry
+            {t('dashboard.retry')}
           </Button>
           <Button variant="outline" onClick={() => (window.location.href = '/login')}>
-            Go to login
+            {t('dashboard.goToLogin')}
           </Button>
           <Button variant="outline" onClick={resetSession}>
-            Reset session
+            {t('dashboard.resetSession')}
           </Button>
         </div>
       </Card>
@@ -140,6 +144,7 @@ export default function Dashboard() {
   const stats = data?.stats || {};
   const badges = data?.badges || [];
   const courses = data?.courses || [];
+  const mentors = data?.mentors || [];
   const recentActivity = data?.recentActivity || [];
 
   return (
@@ -147,16 +152,16 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Welcome back, {user?.name || 'Student'}
+            {t('dashboard.welcomeBack', { name: user?.name || 'Student' })}
           </div>
-          <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Continue where you left off.</div>
+          <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t('dashboard.continueWhere')}</div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => (window.location.href = '/courses')}>
-            Browse courses
+            {t('dashboard.browseCourses')}
           </Button>
           <Button variant="secondary" onClick={() => (window.location.href = '/profile')}>
-            Profile
+            {t('dashboard.profile')}
           </Button>
         </div>
       </div>
@@ -166,17 +171,23 @@ export default function Dashboard() {
       <Card className="p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-extrabold">Continue learning</div>
-            <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Pick up a course and keep moving.</div>
+            <div className="text-sm font-extrabold">{t('dashboard.continueLearning')}</div>
+            <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t('dashboard.pickUpCourse')}</div>
           </div>
           <Button variant="ghost" onClick={() => (window.location.href = '/courses')}>
-            View all
+            {t('dashboard.viewAll')}
           </Button>
         </div>
         <div className="mt-4">
           <CourseCarousel courses={courses} />
         </div>
       </Card>
+
+      {mentors.length > 0 && (
+        <Card className="p-5">
+          <MentorsList mentors={mentors} />
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-1">
@@ -185,11 +196,11 @@ export default function Dashboard() {
         <Card className="p-5 lg:col-span-2">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-extrabold">Recent activity</div>
-              <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">A quick view of what changed.</div>
+              <div className="text-sm font-extrabold">{t('dashboard.recentActivity')}</div>
+              <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t('dashboard.quickView')}</div>
             </div>
             <Button variant="outline" onClick={() => (window.location.href = '/community')}>
-              Community
+              {t('dashboard.community')}
             </Button>
           </div>
           <div className="mt-4 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-950/20">
@@ -199,7 +210,7 @@ export default function Dashboard() {
               </div>
             ))}
             {recentActivity.length === 0 && (
-              <div className="p-4 text-sm text-slate-600 dark:text-slate-300">No recent activity yet.</div>
+              <div className="p-4 text-sm text-slate-600 dark:text-slate-300">{t('dashboard.noRecentActivity')}</div>
             )}
           </div>
         </Card>

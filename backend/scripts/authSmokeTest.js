@@ -117,34 +117,16 @@ async function main() {
       body: { name: 'Test User', email, password }
     });
     assert.equal(registerResp.status, 201, registerResp.text);
+    assert.ok(jar.get('authToken'), 'authToken cookie set after register');
+    assert.ok(registerResp.json?.token, 'token returned on register');
 
-    const loginBeforeVerify = await api('/api/auth/login', {
+    const login = await api('/api/auth/login', {
       method: 'POST',
       body: { email, password }
     });
-    assert.equal(loginBeforeVerify.status, 403, loginBeforeVerify.text);
-    assert.match(String(loginBeforeVerify.json?.error || ''), /verify/i);
-
-    const forgot = await api('/api/auth/forgot-password', {
-      method: 'POST',
-      body: { email }
-    });
-    assert.equal(forgot.status, 200, forgot.text);
-    assert.ok(forgot.json?.verificationCode, 'expected verificationCode in non-production response');
-
-    const code = String(forgot.json.verificationCode);
-    assert.ok(code, 'verification code parsed');
-
-    const verifyResp = await api('/api/auth/verify', { method: 'POST', body: { email, code } });
-    assert.equal(verifyResp.status, 200, verifyResp.text);
-
-    const loginAfterVerify = await api('/api/auth/login', {
-      method: 'POST',
-      body: { email, password }
-    });
-    assert.equal(loginAfterVerify.status, 200, loginAfterVerify.text);
-    assert.ok(jar.get('authToken'), 'authToken cookie set');
-    assert.ok(loginAfterVerify.json?.token, 'token returned');
+    assert.equal(login.status, 200, login.text);
+    assert.ok(jar.get('authToken'), 'authToken cookie set after login');
+    assert.ok(login.json?.token, 'token returned on login');
 
     const protectedResp = await api('/api/protected', { method: 'GET', csrf: false });
     assert.equal(protectedResp.status, 200, protectedResp.text);
@@ -160,4 +142,3 @@ main().catch((err) => {
   console.error('Auth smoke test failed:', err?.stack || err?.message || String(err));
   process.exitCode = 1;
 });
-

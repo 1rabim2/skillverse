@@ -1,5 +1,6 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
 import VideoEmbed from '../components/VideoEmbed';
 import ResourceEmbed from '../components/ResourceEmbed';
@@ -9,6 +10,7 @@ import Input from '../components/ui/Input';
 import { uploadUserVideo } from '../lib/uploads';
 import { resolveAssetUrl } from '../lib/assets';
 import { API_BASE } from '../lib/apiBase';
+import i18n, { getLocaleForLanguage } from '../i18n';
 
 function getCurriculum(course) {
   const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
@@ -53,7 +55,34 @@ function formatBytes(bytes) {
   return `${value.toFixed(value >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
 }
 
+function normalizeKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function displayLevel(level, t) {
+  const key = normalizeKey(level);
+  if (key === 'beginner') return t('meta.level.beginner');
+  if (key === 'intermediate') return t('meta.level.intermediate');
+  if (key === 'advanced') return t('meta.level.advanced');
+  return String(level || '').trim() || t('meta.level.beginner');
+}
+
+function displayCategory(category, t) {
+  const key = normalizeKey(category);
+  if (key === 'web_fundamentals') return t('meta.category.web_fundamentals');
+  if (key === 'frontend') return t('meta.category.frontend');
+  if (key === 'backend') return t('meta.category.backend');
+  if (key === 'database') return t('meta.category.database');
+  if (key === 'tools') return t('meta.category.tools');
+  if (key === 'general') return t('meta.category.general');
+  return String(category || '').trim() || t('meta.category.general');
+}
+
 export default function CourseDetail() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const [authed, setAuthed] = React.useState(false);
   const [authChecked, setAuthChecked] = React.useState(false);
@@ -76,6 +105,7 @@ export default function CourseDetail() {
   const [projectSub, setProjectSub] = React.useState({ repoUrl: '', demoUrl: '', notes: '', status: 'draft', feedback: '', attachments: [], submittedAt: null, reviewedAt: null });
   const [projectBusy, setProjectBusy] = React.useState(false);
   const [projectMsg, setProjectMsg] = React.useState('');
+  const locale = getLocaleForLanguage(String(i18n.language || 'en'));
 
   React.useEffect(() => {
     let mounted = true;
@@ -445,7 +475,7 @@ export default function CourseDetail() {
       if (data.certificate?.certificateId) {
         setActionMsg(`Certificate issued: ${data.certificate.certificateId}`);
       } else {
-        setActionMsg('Lesson completed.');
+        setActionMsg(t('course.lessonCompletedMsg'));
       }
     } catch (err) {
       setActionMsg(err.message);
@@ -457,14 +487,14 @@ export default function CourseDetail() {
   if (loading) {
     return (
       <Card className="p-5">
-        <div className="text-sm text-slate-600 dark:text-slate-300">Loading course...</div>
+        <div className="text-sm text-slate-600 dark:text-slate-300">{t('course.loadingCourse')}</div>
       </Card>
     );
   }
   if (error) {
     return (
       <Card className="p-5">
-        <div className="text-sm font-semibold text-slate-900 dark:text-white">Could not load course</div>
+        <div className="text-sm font-semibold text-slate-900 dark:text-white">{t('course.couldNotLoadCourse')}</div>
         <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{error}</div>
       </Card>
     );
@@ -489,6 +519,10 @@ export default function CourseDetail() {
   const isLessonCompleted = selectedLesson?._id ? completedSet.has(String(selectedLesson._id)) : false;
   const latestQuiz = selectedLesson?._id ? progress.latestQuizByLessonId?.[String(selectedLesson._id)] : null;
   const quizPassed = !!(quizResult?.passed || latestQuiz?.passed);
+  const mentor = course?.instructorId || null;
+  const mentorName = String(mentor?.name || 'Mentor');
+  const mentorAvatar = resolveAssetUrl(mentor?.avatarUrl || '');
+  const mentorInitial = mentorName.slice(0, 1).toUpperCase();
 
   return (
     <div className="space-y-4">
@@ -496,24 +530,63 @@ export default function CourseDetail() {
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{course.title}</h1>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            {(course.level || 'Beginner')} • {(course.category || 'General')}
-            {course.skillPath?.title ? ` • Skill Path: ${course.skillPath.title}` : ''}
+            {displayLevel(course.level, t)} • {displayCategory(course.category, t)}
+            {course.skillPath?.title ? ` • ${t('course.skillPath')}: ${course.skillPath.title}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => (window.location.href = '/dashboard')}>Back to Dashboard</Button>
-          <Button variant="outline" onClick={() => (window.location.href = '/certificates')}>My Certificates</Button>
+          <Button variant="outline" onClick={() => (window.location.href = '/dashboard')}>{t('course.backToDashboard')}</Button>
+          <Button variant="outline" onClick={() => (window.location.href = '/certificates')}>{t('course.myCertificates')}</Button>
         </div>
       </div>
+
+      {mentor ? (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {mentorAvatar ? (
+                <img
+                  src={mentorAvatar}
+                  alt={mentorName}
+                  className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+                />
+              ) : (
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-200 text-sm font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {mentorInitial || 'M'}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="truncate text-sm font-extrabold text-slate-900 dark:text-white">{mentorName}</div>
+                {mentor?.headline ? (
+                  <div className="truncate text-xs text-slate-600 dark:text-slate-300">{mentor.headline}</div>
+                ) : (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{t('course.mentor')}</div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                disabled={!authed || !enrolled}
+                onClick={() => {
+                  window.location.href = `/courses/${encodeURIComponent(course._id)}/chat`;
+                }}
+              >
+                {authed && enrolled ? t('course.chatWithMentor') : t('course.enrollToChat')}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
         {hasLessons ? (
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
             <Card className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm font-extrabold text-slate-900 dark:text-white">Curriculum</div>
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-white">{t('course.curriculum')}</div>
                   <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {completedSet.size} / {total} lessons completed
+                    {t('course.lessonsCompleted', { done: completedSet.size, total })}
                   </div>
                 </div>
                 <div className="text-sm font-extrabold text-slate-900 dark:text-white">{Math.min(100, progress.percent || 0)}%</div>
@@ -528,7 +601,7 @@ export default function CourseDetail() {
 
               {authChecked && !authed && (
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200">
-                  Sign in to enroll, take quizzes, and track progress.
+                  {t('course.signInToTrack')}
                 </div>
               )}
               {authed && !enrolled && (
@@ -538,7 +611,7 @@ export default function CourseDetail() {
                   disabled={updating}
                   onClick={enroll}
                 >
-                  {updating ? 'Enrolling...' : 'Enroll in Course'}
+                  {updating ? t('course.enrolling') : t('course.enroll')}
                 </Button>
               )}
 
@@ -548,7 +621,7 @@ export default function CourseDetail() {
                   .sort((a, b) => (a.order || 0) - (b.order || 0))
                   .map((ch) => (
                     <div key={ch._id || ch.title} className="mt-4">
-                      <div className="mb-2 text-sm font-extrabold text-slate-900 dark:text-white">{ch.title || 'Chapter'}</div>
+                      <div className="mb-2 text-sm font-extrabold text-slate-900 dark:text-white">{ch.title || t('course.chapter')}</div>
                       <div className="flex flex-col gap-2">
                         {(ch.lessons || [])
                           .slice()
@@ -573,10 +646,10 @@ export default function CourseDetail() {
                               >
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{ls.title || 'Lesson'}</div>
+                                    <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{ls.title || t('course.lesson')}</div>
                                   </div>
                                   <div className={['text-xs font-semibold', done ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'].join(' ')}>
-                                    {done ? 'Done' : (ls.type || 'reading')}
+                                    {done ? t('course.done') : t(`course.lessonType.${String(ls.type || 'reading')}`)}
                                   </div>
                                 </div>
                               </button>
@@ -648,7 +721,7 @@ export default function CourseDetail() {
 
               <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">My Notes</h4>
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">{t('course.myNotes')}</h4>
                   <div className="flex flex-wrap items-center gap-2">
                     {noteMsg && (
                       <div
@@ -661,19 +734,19 @@ export default function CourseDetail() {
                       </div>
                     )}
                     <Button type="button" variant="outline" disabled={!authed || noteBusy} onClick={saveNote}>
-                      {noteBusy ? 'Saving...' : 'Save notes'}
+                      {noteBusy ? t('course.saving') : t('course.saveNotes')}
                     </Button>
                   </div>
                 </div>
                 {authChecked && !authed && (
                   <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200">
-                    Sign in to write notes for this lesson.
+                    {t('course.signInToWriteNotes')}
                   </div>
                 )}
                 <textarea
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
-                  placeholder="Write what you learned, questions, your own links, code snippets..."
+                  placeholder={t('course.notesPlaceholder')}
                   rows={6}
                   disabled={!authed}
                   className={[
@@ -736,7 +809,7 @@ export default function CourseDetail() {
 
                       <div className="flex flex-wrap items-center gap-2">
                         <Button disabled={quizSubmitting || !enrolled} onClick={() => submitQuiz(String(selectedLesson._id))}>
-                          {quizSubmitting ? 'Submitting...' : enrolled ? 'Submit quiz' : 'Enroll to submit'}
+                          {quizSubmitting ? t('course.submitting') : enrolled ? t('course.submitQuiz') : t('course.enrollToSubmit')}
                         </Button>
                         <Button
                           variant={isLessonCompleted ? 'primary' : 'outline'}
@@ -744,7 +817,13 @@ export default function CourseDetail() {
                           disabled={updating || !enrolled || isLessonCompleted || (selectedQuizQuestions.length > 0 && !quizPassed)}
                           onClick={() => completeLesson(String(selectedLesson._id))}
                         >
-                          {isLessonCompleted ? 'Lesson completed' : updating ? 'Saving...' : selectedQuizQuestions.length > 0 ? 'Complete (pass quiz)' : 'Mark lesson complete'}
+                          {isLessonCompleted
+                            ? t('course.lessonCompleted')
+                            : updating
+                              ? t('course.saving')
+                              : selectedQuizQuestions.length > 0
+                                ? t('course.completePassQuiz')
+                                : t('course.markLessonComplete')}
                         </Button>
                       </div>
 
@@ -756,10 +835,10 @@ export default function CourseDetail() {
                               (quizResult?.passed || latestQuiz?.passed) ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'
                             ].join(' ')}
                           >
-                            {(quizResult?.passed || latestQuiz?.passed) ? 'Passed' : 'Not passed yet'}
+                            {(quizResult?.passed || latestQuiz?.passed) ? t('course.passed') : t('course.notPassedYet')}
                           </div>
                           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            Score: {(quizResult?.scorePercent ?? latestQuiz?.scorePercent ?? 0)}% ({(quizResult?.correct ?? latestQuiz?.correct ?? 0)}/{(quizResult?.total ?? latestQuiz?.total ?? 0)} correct)
+                            {t('course.score')}: {(quizResult?.scorePercent ?? latestQuiz?.scorePercent ?? 0)}% ({(quizResult?.correct ?? latestQuiz?.correct ?? 0)}/{(quizResult?.total ?? latestQuiz?.total ?? 0)} {t('course.correct')})
                           </div>
                         </div>
                       )}
@@ -780,7 +859,7 @@ export default function CourseDetail() {
                     disabled={updating || !authed || !enrolled || isLessonCompleted}
                     onClick={() => completeLesson(String(selectedLesson._id))}
                   >
-                    {isLessonCompleted ? 'Lesson completed' : updating ? 'Saving...' : 'Mark lesson complete'}
+                    {isLessonCompleted ? t('course.lessonCompleted') : updating ? t('course.saving') : t('course.markLessonComplete')}
                   </Button>
                 </div>
               )}
@@ -788,7 +867,7 @@ export default function CourseDetail() {
               {selectedLesson?._id && String(selectedLesson?.type || '') === 'project' && (
                 <div className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Project submission</h4>
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">{t('course.projectSubmission')}</h4>
                     <div className="flex flex-wrap items-center gap-2">
                       {projectMsg && (
                         <div
@@ -896,39 +975,39 @@ export default function CourseDetail() {
         ) : (
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_0.7fr]">
             <Card className="p-5">
-              <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">About this course</h3>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">{course.description || 'No description yet.'}</p>
+              <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">{t('course.about')}</h3>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">{course.description || t('course.noDescription')}</p>
 
               {course.videoUrl && (
                 <div className="mt-5">
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Video</h4>
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">{t('course.video')}</h4>
                   <VideoEmbed url={resolveAssetUrl(course.videoUrl)} title={course?.title || 'Course video'} />
                   <div className="mt-2">
-                    <Button as="a" variant="outline" href={resolveAssetUrl(course.videoUrl)} target="_blank" rel="noreferrer">
-                      Open video link
-                    </Button>
+                        <Button as="a" variant="outline" href={resolveAssetUrl(course.videoUrl)} target="_blank" rel="noreferrer">
+                          {t('course.openVideoLink')}
+                        </Button>
                   </div>
                 </div>
               )}
 
               {course.resourceLink && (
                 <div className="mt-5">
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Resources</h4>
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">{t('course.resources')}</h4>
                   <ResourceEmbed url={course.resourceLink} title={course?.title || 'Course resource'} />
                   <div className="mt-2">
-                    <Button as="a" variant="outline" href={course.resourceLink} target="_blank" rel="noreferrer">
-                      Open resource link
-                    </Button>
+                        <Button as="a" variant="outline" href={course.resourceLink} target="_blank" rel="noreferrer">
+                          {t('course.openResourceLink')}
+                        </Button>
                   </div>
                 </div>
               )}
             </Card>
 
               <Card className="p-5">
-                <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">Actions</h3>
+                <h3 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">{t('course.actions')}</h3>
               {authChecked && !authed && (
                 <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">
-                  Login as a student to enroll and track progress.
+                  {t('course.loginToEnroll')}
                 </p>
               )}
               {authed && !enrolled && (
@@ -938,11 +1017,11 @@ export default function CourseDetail() {
                   disabled={updating}
                   onClick={enroll}
                 >
-                  {updating ? 'Enrolling...' : 'Enroll in Course'}
+                  {updating ? t('course.enrolling') : t('course.enroll')}
                 </Button>
               )}
               <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                This course has no curriculum yet. Add chapters/lessons/quizzes from the admin panel to enable lesson tracking.
+                {t('course.noCurriculumYet')}
               </div>
               {actionMsg && (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-100">
