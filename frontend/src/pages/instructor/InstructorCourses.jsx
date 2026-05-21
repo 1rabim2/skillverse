@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { apiFetch } from '../../lib/apiFetch';
+import { displayCourseTitle } from '../../lib/displayUtils';
 
 function badge(course) {
   const approved = course?.isApproved || course?.createdBy;
@@ -68,7 +69,7 @@ export default function InstructorCourses() {
           <Card key={c._id} className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{c.title}</h2>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{displayCourseTitle(c)}</h2>
                 {badge(c)}
               </div>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{c.description || 'No description'}</p>

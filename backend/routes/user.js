@@ -10,6 +10,7 @@ const ProjectSubmission = require('../models/ProjectSubmission');
 const authMiddleware = require('../middleware/auth');
 const { notifyAllAdmins, notifyUser } = require('../utils/notifications');
 const { sendEmail } = require('../utils/email');
+const { publicTutorCourseFilter, isPublicTutorCourse, displayCourseTitle } = require('../utils/courseVisibility');
 const fs = require('fs');
 const path = require('path');
 const { isAllowedAttachmentMime, writeProjectAttachment, attachmentPath } = require('../utils/projectUploads');
@@ -160,12 +161,12 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
     const user = await User.findById(req.user.id)
       .populate({
         path: 'enrolledCourses',
-        select: 'title category level thumbnailUrl instructorId',
+        select: 'title category level thumbnailUrl instructorId status isApproved',
         populate: { path: 'instructorId', select: 'name avatarUrl headline' }
       })
       .populate({
         path: 'progress.course',
-        select: 'title category level thumbnailUrl instructorId',
+        select: 'title category level thumbnailUrl instructorId status isApproved',
         populate: { path: 'instructorId', select: 'name avatarUrl headline' }
       })
       .populate('certificates.course', 'title');
@@ -184,7 +185,7 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
       }
     });
 
-    const enrolledCourses = user.enrolledCourses || [];
+    const enrolledCourses = (user.enrolledCourses || []).filter(isPublicTutorCourse);
     const enrolledIds = new Set(enrolledCourses.map((c) => String(c?._id)).filter(Boolean));
 
     // Dashboard should still feel "full" even when a student enrolled in only 1 course.
@@ -194,7 +195,7 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
     if (remaining > 0) {
       const extras = await Course.find({
         _id: { $nin: Array.from(enrolledIds) },
-        $or: [{ status: 'published' }, { status: { $exists: false } }]
+        ...publicTutorCourseFilter()
       })
         .populate('instructorId', 'name avatarUrl headline')
         .sort({ createdAt: -1 })
@@ -206,7 +207,7 @@ router.get('/me/dashboard', authMiddleware, async (req, res) => {
       const p = progressByCourseId.get(String(course._id)) || { percent: 0, completedAt: null };
       return {
         id: course._id,
-        title: course.title,
+        title: displayCourseTitle(course.title),
         category: course.category,
         level: course.level,
         thumbnailUrl: course.thumbnailUrl || '',
@@ -882,8 +883,7 @@ router.post('/enroll', authMiddleware, requireStudent, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.isActive) return res.status(403).json({ error: 'Account is deactivated' });
     if (!course) return res.status(404).json({ error: 'Course not found' });
-    if (course.status && course.status !== 'published') return res.status(404).json({ error: 'Course not found' });
-    if (course.isApproved === false && !course.createdBy) return res.status(404).json({ error: 'Course not found' });
+    if (!isPublicTutorCourse(course)) return res.status(404).json({ error: 'Course not found' });
 
     const alreadyEnrolled = (user.enrolledCourses || []).some((id) => String(id) === String(course._id));
     if (!alreadyEnrolled) user.enrolledCourses.push(course._id);

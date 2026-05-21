@@ -44,6 +44,14 @@ export function displayCategory(category) {
 }
 
 /**
+ * Hide implementation-only clone suffixes from course titles.
+ */
+export function displayCourseTitle(courseOrTitle, fallback = 'Course') {
+  const raw = typeof courseOrTitle === 'string' ? courseOrTitle : courseOrTitle?.title;
+  return String(raw || fallback).replace(/\s+\(Copy\)$/i, '');
+}
+
+/**
  * Get badge color class for level
  */
 export function getLevelColorClass(level) {

@@ -3,6 +3,7 @@ import { Eye, GripVertical, Plus, Trash2 } from 'lucide-react';
 import adminApi from '../../lib/adminApi';
 import { uploadAdminImage, uploadAdminVideo } from '../../lib/uploads';
 import { resolveAssetUrl } from '../../lib/assets';
+import { displayCourseTitle } from '../../lib/displayUtils';
 
 function uid(prefix = 'id') {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
@@ -229,6 +230,7 @@ export default function AdminCourses() {
   const [filterLevel, setFilterLevel] = React.useState('');
   const [filterStatus, setFilterStatus] = React.useState('');
   const [filterApproval, setFilterApproval] = React.useState(''); // '' | 'pending' | 'requested'
+  const [filterOwner, setFilterOwner] = React.useState('tutor'); // tutor | admin | all
 
   const [page, setPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(1);
@@ -267,6 +269,7 @@ export default function AdminCourses() {
       const effectiveLevel = overrides.level ?? filterLevel;
       const effectiveStatus = overrides.status ?? filterStatus;
       const effectiveApproval = overrides.approval ?? filterApproval;
+      const effectiveOwner = overrides.owner ?? filterOwner;
 
       const pending = effectiveApproval === 'pending' || effectiveApproval === 'requested';
       const requestedOnly = effectiveApproval === 'requested';
@@ -281,6 +284,7 @@ export default function AdminCourses() {
             category: effectiveCategory || undefined,
             level: effectiveLevel || undefined,
             status: effectiveStatus || undefined,
+            owner: effectiveOwner === 'all' ? undefined : effectiveOwner,
             pending: pending ? 1 : undefined,
             requestedOnly: requestedOnly ? 1 : undefined
           }
@@ -296,7 +300,7 @@ export default function AdminCourses() {
         setIsLoading(false);
       }
     },
-    [filterApproval, filterCategory, filterLevel, filterStatus, page, search]
+    [filterApproval, filterCategory, filterLevel, filterOwner, filterStatus, page, search]
   );
 
   React.useEffect(() => {
@@ -305,12 +309,12 @@ export default function AdminCourses() {
       load().catch(() => null);
     }, delayMs);
     return () => clearTimeout(t);
-  }, [filterApproval, filterCategory, filterLevel, filterStatus, load, page, search]);
+  }, [filterApproval, filterCategory, filterLevel, filterOwner, filterStatus, load, page, search]);
 
   React.useEffect(() => {
     if (page !== 1) setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterApproval, filterCategory, filterLevel, filterStatus, search]);
+  }, [filterApproval, filterCategory, filterLevel, filterOwner, filterStatus, search]);
 
   React.useEffect(() => {
     adminApi.get('/skill-paths').then((res) => setSkillPaths(res.data || [])).catch(() => null);
@@ -337,7 +341,7 @@ export default function AdminCourses() {
     setEditingId(item._id);
     setOwnerInstructorId(item.instructorId?._id || '');
     setForm({
-      title: item.title || '',
+      title: displayCourseTitle(item, ''),
       category: item.category || 'General',
       description: item.description || '',
       level: item.level || 'Beginner',
@@ -1112,6 +1116,20 @@ export default function AdminCourses() {
               <div className="md:col-span-3">
                 <select
                   className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800"
+                  value={filterOwner}
+                  onChange={(e) => setFilterOwner(e.target.value)}
+                  disabled={isLoading}
+                  aria-label="Owner"
+                >
+                  <option value="tutor">Tutor courses</option>
+                  <option value="admin">Admin library</option>
+                  <option value="all">All owners</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-3">
+                <select
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800"
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
                   disabled={isLoading}
@@ -1184,6 +1202,7 @@ export default function AdminCourses() {
                     setFilterLevel('');
                     setFilterStatus('');
                     setFilterApproval('');
+                    setFilterOwner('tutor');
                     setPage(1);
                   }}
                   disabled={isLoading}
@@ -1194,8 +1213,9 @@ export default function AdminCourses() {
               </div>
             </form>
           </section>
+        </div>
 
-          <section className="mt-4 flex max-h-[72vh] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+        <section className="flex min-h-[560px] max-h-[78vh] flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40 xl:col-span-12 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Results</h3>
               <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isLoading ? 'Loading...' : `${items.length} on this page`}</div>
@@ -1205,41 +1225,41 @@ export default function AdminCourses() {
                 {loadError}
               </div>
             ) : null}
-            <div className="-mx-5 flex-1 overflow-auto border-t border-slate-200 dark:border-slate-800">
-              <table className="w-full min-w-[640px] text-left text-sm">
+            <div className="-mx-6 flex-1 overflow-auto border-t border-slate-200 dark:border-slate-800">
+              <table className="w-full min-w-[980px] text-left text-sm">
                 <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur dark:bg-slate-900/95">
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                    <th className="w-[86px] px-2 py-3">Thumb</th>
-                    <th className="px-2 py-3">Title</th>
-                    <th className="hidden w-[130px] px-2 py-3 lg:table-cell">Category</th>
-                    <th className="hidden w-[110px] px-2 py-3 lg:table-cell">Level</th>
-                    <th className="hidden w-[170px] px-2 py-3 xl:table-cell">Skill Path</th>
-                    <th className="w-[110px] px-2 py-3">Status</th>
-                    <th className="hidden w-[110px] px-2 py-3 sm:table-cell">Created</th>
-                    <th className="w-[110px] px-2 py-3 text-right">Actions</th>
+                    <th className="w-[112px] px-4 py-4">Thumb</th>
+                    <th className="min-w-[320px] px-4 py-4">Title</th>
+                    <th className="hidden w-[170px] px-4 py-4 lg:table-cell">Category</th>
+                    <th className="hidden w-[140px] px-4 py-4 lg:table-cell">Level</th>
+                    <th className="hidden w-[220px] px-4 py-4 xl:table-cell">Skill Path</th>
+                    <th className="w-[130px] px-4 py-4">Status</th>
+                    <th className="hidden w-[130px] px-4 py-4 sm:table-cell">Created</th>
+                    <th className="w-[140px] px-4 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading ? (
                     <tr>
-                      <td className="px-2 py-6 text-slate-500 dark:text-slate-400" colSpan={8}>
+                      <td className="px-4 py-6 text-slate-500 dark:text-slate-400" colSpan={8}>
                         Loading courses...
                       </td>
                     </tr>
                   ) : null}
                   {items.map((item) => (
                     <tr key={item._id} className="border-b border-slate-100 dark:border-slate-800/70">
-                      <td className="px-2 py-3">
-                        <div className="h-10 w-16 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/30">
+                      <td className="px-4 py-4">
+                        <div className="h-12 w-20 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/30">
                           {item.thumbnailUrl ? (
                             <img src={resolveAssetUrl(item.thumbnailUrl)} alt="" className="h-full w-full object-cover" />
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-2 py-3 font-semibold text-slate-900 dark:text-slate-100">
+                      <td className="px-4 py-4 font-semibold text-slate-900 dark:text-slate-100">
                         <div className="flex items-center gap-2">
-                          <div className="truncate" title={item.title}>
-                            {item.title}
+                          <div className="truncate" title={displayCourseTitle(item)}>
+                            {displayCourseTitle(item)}
                           </div>
                           {!item.createdBy && item.isApproved === false ? (
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
@@ -1260,26 +1280,26 @@ export default function AdminCourses() {
                           </div>
                         ) : null}
                       </td>
-                      <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 lg:table-cell">
+                      <td className="hidden px-4 py-4 text-slate-600 dark:text-slate-300 lg:table-cell">
                         <div className="truncate" title={item.category || ''}>
                           {item.category || '-'}
                         </div>
                       </td>
-                      <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 lg:table-cell">
+                      <td className="hidden px-4 py-4 text-slate-600 dark:text-slate-300 lg:table-cell">
                         <div className="truncate" title={item.level || ''}>
                           {item.level || '-'}
                         </div>
                       </td>
-                      <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 xl:table-cell">
+                      <td className="hidden px-4 py-4 text-slate-600 dark:text-slate-300 xl:table-cell">
                         <div className="truncate" title={item.skillPath?.title || ''}>
                           {item.skillPath?.title || '-'}
                         </div>
                       </td>
-                      <td className="px-2 py-3">
+                      <td className="px-4 py-4">
                         <StatusBadge status={item.status || 'draft'} />
                       </td>
-                      <td className="hidden px-2 py-3 text-slate-600 dark:text-slate-300 sm:table-cell">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '-'}</td>
-                      <td className="px-2 py-3">
+                      <td className="hidden px-4 py-4 text-slate-600 dark:text-slate-300 sm:table-cell">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '-'}</td>
+                      <td className="px-4 py-4">
                         <div className="relative flex items-center justify-end gap-2" data-course-menu>
                           <button
                             onClick={() => edit(item)}
@@ -1335,7 +1355,7 @@ export default function AdminCourses() {
                   ))}
                   {!isLoading && items.length === 0 && (
                     <tr>
-                      <td className="px-2 py-6 text-slate-500" colSpan={8}>
+                      <td className="px-4 py-6 text-slate-500" colSpan={8}>
                         No courses found.
                       </td>
                     </tr>
@@ -1366,7 +1386,6 @@ export default function AdminCourses() {
               </div>
             </div>
           </section>
-        </div>
       </div>
     </div>
   );

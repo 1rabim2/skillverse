@@ -281,6 +281,7 @@ router.get('/courses', adminAuth, async (req, res) => {
     const level = (req.query.level || '').trim();
     const category = (req.query.category || '').trim();
     const status = (req.query.status || '').trim();
+    const owner = String(req.query.owner || '').trim().toLowerCase();
     const pending = String(req.query.pending || '').trim();
     const requestedOnly = String(req.query.requestedOnly || '').trim();
 
@@ -294,10 +295,17 @@ router.get('/courses', adminAuth, async (req, res) => {
     if (level) filter.level = level;
     if (category) filter.category = category;
     if (status) filter.status = status;
+    if (owner === 'tutor' || owner === 'instructor') {
+      filter.instructorId = { $exists: true, $ne: null };
+    } else if (owner === 'admin') {
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: [{ instructorId: null }, { instructorId: { $exists: false } }] });
+    }
 
     if (pending === '1' || pending.toLowerCase() === 'true') {
       filter.isApproved = false;
       filter.createdBy = null;
+      filter.instructorId = { $exists: true, $ne: null };
       if (requestedOnly === '1' || requestedOnly.toLowerCase() === 'true') {
         filter.approvalRequestedAt = { $ne: null };
       }

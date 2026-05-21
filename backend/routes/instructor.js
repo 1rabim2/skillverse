@@ -94,7 +94,7 @@ router.post('/library-courses/:id/clone', authMiddleware, requireRole('instructo
 
     const now = new Date();
     const cloned = await Course.create({
-      title: safeString(source.title, 200) ? `${safeString(source.title, 200)} (Copy)` : 'Course (Copy)',
+      title: safeString(source.title, 200) || 'Course',
       description: safeString(source.description, 5000),
       category: safeString(source.category, 100) || 'General',
       level: safeString(source.level, 20) || 'Beginner',

@@ -36,6 +36,7 @@ const Course = require('./models/Course');
 const SkillPath = require('./models/SkillPath');
 const User = require('./models/User');
 const { isSubscriptionActive, sanitizeCourseForNonSubscriber } = require('./utils/subscription');
+const { publicTutorCourseFilter, isPublicTutorCourse } = require('./utils/courseVisibility');
 const { notifyUser } = require('./utils/notifications');
 const { sendEmail } = require('./utils/email');
 
@@ -187,19 +188,10 @@ app.get('/api/courses', async (req, res) => {
         }
       : {};
 
-    // Student/public browsing should only show published courses.
-    // Treat older seeded data (before status existed) as published for demos.
+    // Student/public browsing should only show approved courses owned by tutors.
+    // Admin/seeded library courses stay available only from the instructor library clone flow.
     filter.$and = filter.$and || [];
-    filter.$and.push({ $or: [{ status: 'published' }, { status: { $exists: false } }] });
-    // Do not expose unapproved instructor courses publicly.
-    // Allow older seeded data that predates the approval fields.
-    filter.$and.push({
-      $or: [
-        { createdBy: { $exists: true, $ne: null } },
-        { isApproved: true },
-        { isApproved: { $exists: false } }
-      ]
-    });
+    filter.$and.push(...publicTutorCourseFilter().$and);
     if (category) filter.category = category;
     if (level) filter.level = level;
     if (skillPath && mongoose.Types.ObjectId.isValid(skillPath)) filter.skillPath = skillPath;
@@ -244,7 +236,7 @@ app.get('/api/courses/:id', optionalAuth, async (req, res) => {
     }
 
     // Hide unapproved courses from public, but allow the owning instructor or admins to preview.
-    if (course.isApproved === false && !course.createdBy) {
+    if (!isPublicTutorCourse(course)) {
       if (!isAdmin && !isOwningInstructor) return res.status(404).json({ error: 'Course not found' });
     }
     const revealQuizAnswers = isAdmin || isOwningInstructor;
@@ -295,15 +287,13 @@ app.get('/api/skill-paths', async (req, res) => {
   try {
     const items = await SkillPath.find()
       .sort({ createdAt: -1 })
-      .populate('courses', 'title category level status thumbnailUrl skillPath isApproved createdBy');
+      .populate('courses', 'title category level status thumbnailUrl skillPath isApproved createdBy instructorId');
 
     const safe = (items || []).map((path) => {
       const raw = path.toObject({ virtuals: true });
       const courses = Array.isArray(raw.courses) ? raw.courses : [];
       const publishedCourses = courses.filter((c) => {
-        const isPublished = !c?.status || c.status === 'published';
-        const isApproved = c?.createdBy || c?.isApproved !== false;
-        return isPublished && isApproved;
+        return isPublicTutorCourse(c);
       });
       return { ...raw, courses: publishedCourses };
     });
@@ -319,15 +309,13 @@ app.get('/api/skill-paths/:id', async (req, res) => {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid id' });
 
-    const item = await SkillPath.findById(id).populate('courses', 'title category level status thumbnailUrl skillPath isApproved createdBy');
+    const item = await SkillPath.findById(id).populate('courses', 'title category level status thumbnailUrl skillPath isApproved createdBy instructorId');
     if (!item) return res.status(404).json({ error: 'Skill path not found' });
 
     const raw = item.toObject({ virtuals: true });
     const courses = Array.isArray(raw.courses) ? raw.courses : [];
     const publishedCourses = courses.filter((c) => {
-      const isPublished = !c?.status || c.status === 'published';
-      const isApproved = c?.createdBy || c?.isApproved !== false;
-      return isPublished && isApproved;
+      return isPublicTutorCourse(c);
     });
 
     res.json({ ...raw, courses: publishedCourses });

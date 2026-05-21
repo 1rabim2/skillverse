@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { apiFetch } from '../../lib/apiFetch';
 import { uploadUserImage } from '../../lib/uploads';
+import { displayCourseTitle } from '../../lib/displayUtils';
 
 function emptyLesson(type = 'reading') {
   return {
@@ -40,7 +41,7 @@ export default function InstructorEditCourse() {
     const res = await apiFetch(`/courses/${id}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || 'Failed to load course');
-    setCourse(data.course);
+    setCourse({ ...(data.course || {}), title: displayCourseTitle(data.course, '') });
   }
 
   React.useEffect(() => {
