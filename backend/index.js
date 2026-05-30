@@ -66,6 +66,12 @@ function withLocalhostVariants(origin) {
   return list;
 }
 
+function idString(value) {
+  if (!value) return '';
+  if (value._id) return String(value._id);
+  return String(value);
+}
+
 // Security: CORS configuration - only allow known frontend origins (with helpful dev defaults)
 const allowedOriginSet = new Set([
   ...withLocalhostVariants(process.env.FRONTEND_URL || 'http://localhost:5173'),
@@ -237,7 +243,7 @@ app.get('/api/courses/:id', optionalAuth, async (req, res) => {
 
     const role = String(req.user?.role || '').toLowerCase();
     const isAdmin = role === 'admin';
-    const isOwningInstructor = role === 'instructor' && String(course.instructorId || '') === String(req.user?.id || '');
+    const isOwningInstructor = role === 'instructor' && idString(course.instructorId) === String(req.user?.id || '');
 
     // Draft courses are visible only to admins and the owning instructor.
     if (course.status && course.status !== 'published' && !isAdmin && !isOwningInstructor) {
