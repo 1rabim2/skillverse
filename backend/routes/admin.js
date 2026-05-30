@@ -38,6 +38,16 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
+function cookieOptions(maxAge) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'strict',
+    ...(maxAge ? { maxAge } : {})
+  };
+}
+
 const adminAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -63,34 +73,16 @@ function activity(type, message) {
 
 // Helper to set JWT in httpOnly cookie for admin
 function setAdminAuthCookie(res, token) {
-  res.cookie('adminToken', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  });
+  res.cookie('adminToken', token, cookieOptions(7 * 24 * 60 * 60 * 1000));
 
   // Unified auth cookie (shared login across roles)
-  res.cookie('authToken', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  });
+  res.cookie('authToken', token, cookieOptions(7 * 24 * 60 * 60 * 1000));
 }
 
 // Helper to clear admin auth cookie
 function clearAdminAuthCookie(res) {
-  res.clearCookie('adminToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
-  });
-  res.clearCookie('authToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
-  });
+  res.clearCookie('adminToken', cookieOptions());
+  res.clearCookie('authToken', cookieOptions());
 }
 
 router.post('/auth/login', adminAuthLimiter, async (req, res) => {

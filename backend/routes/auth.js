@@ -15,6 +15,16 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
+function cookieOptions(maxAge) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'strict',
+    ...(maxAge ? { maxAge } : {})
+  };
+}
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 60,
@@ -43,39 +53,21 @@ function emailFilter(email) {
 
 // Helper to set JWT in httpOnly cookie
 function setAuthCookie(res, token) {
-  res.cookie('authToken', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  });
+  res.cookie('authToken', token, cookieOptions(7 * 24 * 60 * 60 * 1000));
 }
 
 // Backwards compatibility for older admin UI which used `adminToken` cookie.
 function setAdminCompatCookie(res, token) {
-  res.cookie('adminToken', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  });
+  res.cookie('adminToken', token, cookieOptions(7 * 24 * 60 * 60 * 1000));
 }
 
 // Helper to clear auth cookie
 function clearAuthCookie(res) {
-  res.clearCookie('authToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
-  });
+  res.clearCookie('authToken', cookieOptions());
 }
 
 function clearAdminCompatCookie(res) {
-  res.clearCookie('adminToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
-  });
+  res.clearCookie('adminToken', cookieOptions());
 }
 
 // Register

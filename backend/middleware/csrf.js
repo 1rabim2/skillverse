@@ -2,6 +2,16 @@
 // Uses double-submit cookie pattern
 const crypto = require('crypto');
 
+function cookieOptions(maxAge) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'strict',
+    ...(maxAge ? { maxAge } : {})
+  };
+}
+
 // Generate CSRF token
 function generateCSRFToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -12,12 +22,7 @@ function csrfProtection(req, res, next) {
   // Generate and set CSRF token in a secure httpOnly cookie
   if (!req.cookies || !req.cookies['XSRF-TOKEN']) {
     const token = generateCSRFToken();
-    res.cookie('XSRF-TOKEN', token, {
-      httpOnly: true, // SECURE: httpOnly prevents XSS attacks
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    });
+    res.cookie('XSRF-TOKEN', token, cookieOptions(24 * 60 * 60 * 1000));
     req.csrfToken = token;
   } else {
     req.csrfToken = req.cookies['XSRF-TOKEN'];
