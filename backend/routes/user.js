@@ -1309,13 +1309,28 @@ router.get('/me/game/quiz', authMiddleware, requireStudent, async (req, res) => 
     if (user.role !== 'student') return res.status(403).json({ error: 'Student access required' });
 
     const enrolled = new Set((user.enrolledCourses || []).map((id) => String(id)));
-    if (enrolled.size === 0) return res.json({ items: [], count, source: 'enrolled', message: 'Enroll in a course to unlock quiz game questions.' });
 
     let sourceCourseIds = Array.from(enrolled);
+    let source = 'enrolled';
     if (courseId) {
       if (!isObjectId(courseId)) return res.status(400).json({ error: 'Invalid courseId' });
       if (!enrolled.has(courseId)) return res.status(403).json({ error: 'You must enroll in the course to use it in the quiz game' });
       sourceCourseIds = [courseId];
+      source = 'course';
+    } else if (enrolled.size === 0) {
+      const publicCourses = await Course.find({
+        status: 'published',
+        isApproved: true
+      })
+        .select('_id')
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .limit(25);
+      sourceCourseIds = publicCourses.map((c) => String(c._id));
+      source = 'public';
+    }
+
+    if (sourceCourseIds.length === 0) {
+      return res.json({ items: [], count, totalPool: 0, source, message: 'No quiz questions are available yet.' });
     }
 
     const courses = await Course.find({ _id: { $in: sourceCourseIds } }).select('title chapters');
@@ -1351,7 +1366,7 @@ router.get('/me/game/quiz', authMiddleware, requireStudent, async (req, res) => 
     }
 
     const items = pool.slice(0, Math.min(count, pool.length));
-    res.json({ items, count, totalPool: pool.length, source: courseId ? 'course' : 'enrolled' });
+    res.json({ items, count, totalPool: pool.length, source });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load quiz game questions' });
   }

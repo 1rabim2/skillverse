@@ -20,6 +20,34 @@ function addOneMonth(date) {
   return next;
 }
 
+function money(amount, currency = 'NPR') {
+  const value = Number(amount || 0) / 100;
+  return `${currency} ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function receiptHtml({ user, payment, paidAt, nextEnd, frontendUrl }) {
+  const amountText = money(payment.amount, payment.currency || 'NPR');
+  const paidText = paidAt.toLocaleString();
+  const endText = nextEnd.toLocaleDateString();
+  const orderId = payment.purchaseOrderId || payment.pidx || String(payment._id);
+  return `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827">
+      <h2 style="margin:0 0 12px">SkillVerse Subscription Receipt</h2>
+      <p>Hello ${user.name || 'Student'},</p>
+      <p>Your monthly subscription payment was completed successfully.</p>
+      <table style="border-collapse:collapse;margin:16px 0;min-width:320px">
+        <tr><td style="padding:6px 12px;border:1px solid #e5e7eb"><b>Order ID</b></td><td style="padding:6px 12px;border:1px solid #e5e7eb">${orderId}</td></tr>
+        <tr><td style="padding:6px 12px;border:1px solid #e5e7eb"><b>Amount</b></td><td style="padding:6px 12px;border:1px solid #e5e7eb">${amountText}</td></tr>
+        <tr><td style="padding:6px 12px;border:1px solid #e5e7eb"><b>Status</b></td><td style="padding:6px 12px;border:1px solid #e5e7eb">Completed</td></tr>
+        <tr><td style="padding:6px 12px;border:1px solid #e5e7eb"><b>Paid At</b></td><td style="padding:6px 12px;border:1px solid #e5e7eb">${paidText}</td></tr>
+        <tr><td style="padding:6px 12px;border:1px solid #e5e7eb"><b>Valid Until</b></td><td style="padding:6px 12px;border:1px solid #e5e7eb">${endText}</td></tr>
+      </table>
+      <p>Open your subscription page: <a href="${frontendUrl}/subscribe">${frontendUrl}/subscribe</a></p>
+      <p>Thank you for using SkillVerse.</p>
+    </div>
+  `;
+}
+
 function khaltiConfig() {
   const secret = String(process.env.KHALTI_SECRET_KEY || '').trim();
   const baseUrl = String(process.env.KHALTI_BASE_URL || 'https://dev.khalti.com').trim().replace(/\/+$/, '');
@@ -147,7 +175,7 @@ router.post('/khalti/lookup', requireStudent, async (req, res) => {
     const pidx = String(req.body?.pidx || '').trim();
     if (!pidx) return res.status(400).json({ error: 'pidx required' });
 
-    const { secret, baseUrl, monthlyAmount } = khaltiConfig();
+    const { secret, baseUrl, monthlyAmount, frontendUrl } = khaltiConfig();
 
     const payment = await Payment.findOne({ provider: 'khalti', pidx, user: user._id });
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
@@ -201,11 +229,22 @@ router.post('/khalti/lookup', requireStudent, async (req, res) => {
         meta: { provider: 'khalti', pidx }
       }).catch(() => null);
 
+      const paidAt = payment.paidAt || new Date();
+      const amountText = money(payment.amount || monthlyAmount, payment.currency || 'NPR');
+      const orderId = payment.purchaseOrderId || payment.pidx || String(payment._id);
+
       sendEmail({
         to: user.email,
-        subject: 'Skillverse subscription activated',
-        text: `Your Skillverse monthly subscription is active until ${nextEnd.toLocaleDateString()}.`,
-        html: `<p>Your Skillverse monthly subscription is active until <b>${nextEnd.toLocaleDateString()}</b>.</p>`
+        subject: 'SkillVerse subscription receipt',
+        text:
+          `SkillVerse Subscription Receipt\n\n` +
+          `Order ID: ${orderId}\n` +
+          `Amount: ${amountText}\n` +
+          `Status: Completed\n` +
+          `Paid At: ${paidAt.toLocaleString()}\n` +
+          `Valid Until: ${nextEnd.toLocaleDateString()}\n\n` +
+          `Open: ${frontendUrl}/subscribe`,
+        html: receiptHtml({ user, payment, paidAt, nextEnd, frontendUrl })
       }).catch(() => null);
 
       return res.json({

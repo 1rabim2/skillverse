@@ -38,7 +38,13 @@ function isCoursePubliclyVisible(course) {
   return false;
 }
 
-// Instructor: browse platform library courses (admin-created or legacy seeded)
+function idString(value) {
+  if (!value) return '';
+  if (value._id) return String(value._id);
+  return String(value);
+}
+
+// Instructor: browse platform library courses (published courses not owned by this instructor)
 router.get('/library-courses', authMiddleware, requireRole('instructor'), async (req, res) => {
   try {
     const page = Math.max(1, Number(req.query.page || 1));
@@ -55,8 +61,14 @@ router.get('/library-courses', authMiddleware, requireRole('instructor'), async 
             { isApproved: { $exists: false } } // legacy/seeded
           ]
         },
-        // Library = not owned by any instructor (admin/seeded content)
-        { $or: [{ instructorId: null }, { instructorId: { $exists: false } }] }
+        // Library = cloneable examples from the platform/other mentors, not your own drafts.
+        {
+          $or: [
+            { instructorId: null },
+            { instructorId: { $exists: false } },
+            { instructorId: { $ne: req.user.id } }
+          ]
+        }
       ]
     };
 
@@ -89,7 +101,9 @@ router.post('/library-courses/:id/clone', authMiddleware, requireRole('instructo
 
     const source = await Course.findById(id);
     if (!source) return res.status(404).json({ error: 'Course not found' });
-    if (source.instructorId) return res.status(400).json({ error: 'This course is not in the library' });
+    if (idString(source.instructorId) === String(req.user.id || '')) {
+      return res.status(400).json({ error: 'You already own this course' });
+    }
     if (!isCoursePubliclyVisible(source)) return res.status(404).json({ error: 'Course not found' });
 
     const now = new Date();
