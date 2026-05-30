@@ -442,11 +442,11 @@ export default function CourseDetail() {
       if (data.progress) {
         setProgress((prev) => ({
           ...prev,
-          percent: data.progress.percent || prev.percent,
+          percent: data.progress.percent ?? prev.percent,
           completedLessonIds: data.progress.completedLessonIds || prev.completedLessonIds
         }));
       }
-      if (data.certificate?.certificateId) setActionMsg(`Certificate issued: ${data.certificate.certificateId}`);
+      if (data.certificate?.certificateId) setActionMsg(`Certificate issued: ${data.certificate.certificateId}. Portfolio updated.`);
     } catch (err) {
       setActionMsg(err.message);
     } finally {
@@ -468,12 +468,12 @@ export default function CourseDetail() {
       if (data.progress) {
         setProgress((prev) => ({
           ...prev,
-          percent: data.progress.percent || prev.percent,
+          percent: data.progress.percent ?? prev.percent,
           completedLessonIds: data.progress.completedLessonIds || prev.completedLessonIds
         }));
       }
       if (data.certificate?.certificateId) {
-        setActionMsg(`Certificate issued: ${data.certificate.certificateId}`);
+        setActionMsg(`Certificate issued: ${data.certificate.certificateId}. Portfolio updated.`);
       } else {
         setActionMsg(t('course.lessonCompletedMsg'));
       }

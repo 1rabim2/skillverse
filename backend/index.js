@@ -133,6 +133,15 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ token: req.csrfToken });
 });
 
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
 // Public localization settings (default language + supported languages).
 // Used by the frontend to pick an initial language before a user makes a choice.
 app.get('/api/settings/localization', async (req, res) => {

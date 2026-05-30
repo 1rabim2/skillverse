@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../lib/apiFetch';
+import { API_BASE } from '../lib/apiBase';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 
@@ -16,7 +17,6 @@ function SectionCard({ title, children, right }) {
     </Card>
   );
 }
-
 export default function Portfolio() {
   const { t } = useTranslation();
   const [data, setData] = React.useState(null);
@@ -148,7 +148,7 @@ export default function Portfolio() {
                   <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900">
                     <div className="min-w-0">
                       <div className="truncate font-semibold">{c.title}</div>
-                      <div className="text-xs text-slate-500">{c.category} • {c.level}</div>
+                      <div className="text-xs text-slate-500">{[c.category, c.level].filter(Boolean).join(' - ')}</div>
                     </div>
                     <div className="text-xs text-slate-500">
                       {c.completedAt ? new Date(c.completedAt).toLocaleDateString() : ''}
@@ -171,7 +171,17 @@ export default function Portfolio() {
                       <div className="truncate font-semibold">{c.course?.title || 'Course'}</div>
                       <div className="text-xs text-slate-500">{c.certificateId}</div>
                     </div>
-                    <div className="text-xs text-slate-500">{c.issuedAt ? new Date(c.issuedAt).toLocaleDateString() : ''}</div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="text-xs text-slate-500">{c.issuedAt ? new Date(c.issuedAt).toLocaleDateString() : ''}</div>
+                      {c.certificateId ? (
+                        <a
+                          href={`${API_BASE}/user/me/certificates/${encodeURIComponent(String(c.certificateId))}/download`}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+                        >
+                          PDF
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
                 {certificates.length === 0 && (

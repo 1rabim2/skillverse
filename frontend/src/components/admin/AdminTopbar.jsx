@@ -109,8 +109,8 @@ export default function AdminTopbar({ admin, onToggleSidebar }) {
             onClick={async () => {
               const next = !open;
               setOpen(next);
-            if (next) await loadNotifications();
-          }}
+              if (next) await loadNotifications();
+            }}
             className="relative rounded-xl border border-slate-300 bg-white p-2 text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             title="Notifications"
           >

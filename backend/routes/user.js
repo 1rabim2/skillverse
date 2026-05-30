@@ -73,9 +73,62 @@ function safeUrl(value) {
   }
 }
 
+function attachCertificateIssueState(certificate, wasNewlyIssued = false) {
+  if (certificate) {
+    certificate.$locals = certificate.$locals || {};
+    certificate.$locals.wasNewlyIssued = !!wasNewlyIssued;
+  }
+  return certificate;
+}
+
+function ensureUserCertificateRef(user, certificate) {
+  if (!user || !certificate) return false;
+  user.certificates = user.certificates || [];
+  const exists = user.certificates.some((c) => (
+    String(c.certificateId || '') === String(certificate.certificateId || '') ||
+    (c.course && String(c.course) === String(certificate.course))
+  ));
+  if (exists) return false;
+
+  user.certificates.push({
+    certificateId: certificate.certificateId,
+    course: certificate.course,
+    issuedAt: certificate.issuedAt || new Date()
+  });
+  return true;
+}
+
+function addBadgeOnce(user, badge) {
+  user.badges = user.badges || [];
+  if (user.badges.some((b) => b.name === badge.name)) return;
+  user.badges.push({ ...badge, earnedAt: new Date() });
+}
+
+async function awardCourseCompletionRewards(user, certificate) {
+  if (!certificate?.$locals?.wasNewlyIssued) return;
+
+  user.xp = (user.xp || 0) + 100;
+
+  const courseCount = await Certificate.countDocuments({ user: user._id });
+  if (courseCount === 1) {
+    addBadgeOnce(user, {
+      name: 'First Course',
+      description: 'Completed your first course on Skillverse',
+      icon: 'trophy'
+    });
+  }
+
+  if (courseCount === 5) {
+    addBadgeOnce(user, {
+      name: 'Course Collector',
+      description: 'Completed 5 courses',
+      icon: 'books'
+    });
+  }
+}
+
 async function issueCertificateIfNeeded({ user, course, progressEntry }) {
   if ((progressEntry.percent || 0) < 100) return null;
-  if (progressEntry.completedAt) return null;
 
   // Require passing the course final exam (a quiz lesson titled "Final Exam").
   const chapters = Array.isArray(course?.chapters) ? course.chapters : [];
@@ -95,10 +148,14 @@ async function issueCertificateIfNeeded({ user, course, progressEntry }) {
     if (!attempt || !attempt.passed || (attempt.scorePercent || 0) < passPercent) return null;
   }
 
-  progressEntry.completedAt = new Date();
-
   const existing = await Certificate.findOne({ user: user._id, course: course._id });
-  if (existing) return existing;
+  if (existing) {
+    if (!progressEntry.completedAt) progressEntry.completedAt = existing.issuedAt || new Date();
+    ensureUserCertificateRef(user, existing);
+    return attachCertificateIssueState(existing, false);
+  }
+
+  if (!progressEntry.completedAt) progressEntry.completedAt = new Date();
 
   let certificateId = makeCertificateId();
   for (let i = 0; i < 3; i++) {
@@ -117,9 +174,18 @@ async function issueCertificateIfNeeded({ user, course, progressEntry }) {
     scorePercent = attempt?.scorePercent ?? null;
     passPercent = Number.isFinite(Number(finalExamLesson.quiz?.passPercent)) ? Number(finalExamLesson.quiz.passPercent) : null;
   }
-  const certificate = await Certificate.create({ certificateId, user: user._id, course: course._id, scorePercent, passPercent });
-  user.certificates = user.certificates || [];
-  user.certificates.push({ certificateId, course: course._id, issuedAt: certificate.issuedAt });
+  let certificate;
+  try {
+    certificate = await Certificate.create({ certificateId, user: user._id, course: course._id, scorePercent, passPercent });
+  } catch (err) {
+    if (err?.code !== 11000) throw err;
+    certificate = await Certificate.findOne({ user: user._id, course: course._id });
+    if (!certificate) throw err;
+    ensureUserCertificateRef(user, certificate);
+    return attachCertificateIssueState(certificate, false);
+  }
+
+  ensureUserCertificateRef(user, certificate);
 
   notifyUser(user._id, {
     type: 'success',
@@ -145,7 +211,7 @@ async function issueCertificateIfNeeded({ user, course, progressEntry }) {
     html: `<p>You earned a certificate for <b>${course.title}</b>.</p><p>View/download it here: <a href="${frontend}/certificates">${frontend}/certificates</a></p>`
   }).catch(() => null);
 
-  return certificate;
+  return attachCertificateIssueState(certificate, true);
 }
 
 async function loadUserAndCourse({ userId, courseId }) {
@@ -947,6 +1013,7 @@ router.post('/progress', authMiddleware, requireStudent, async (req, res) => {
     let certificate = null;
 
     certificate = await issueCertificateIfNeeded({ user, course, progressEntry: entry });
+    await awardCourseCompletionRewards(user, certificate);
 
     await user.save();
     res.json({
@@ -1053,6 +1120,7 @@ router.post('/course/:courseId/lessons/:lessonId/complete', authMiddleware, requ
     entry.percent = totalLessons > 0 ? Math.min(100, Math.round((nextCompleted / totalLessons) * 100)) : (entry.percent || 0);
 
     const certificate = await issueCertificateIfNeeded({ user, course, progressEntry: entry });
+    await awardCourseCompletionRewards(user, certificate);
     await user.save();
 
     res.json({
@@ -1159,34 +1227,7 @@ router.post('/course/:courseId/lessons/:lessonId/quiz', authMiddleware, requireS
     }
 
     const certificate = await issueCertificateIfNeeded({ user, course, progressEntry: entry });
-    
-    // Award XP and badge for completing a course
-    if (certificate && !user.certificates?.some(c => c.certificateId === certificate.certificateId)) {
-      user.xp = (user.xp || 0) + 100; // 100 XP for course completion
-      
-      // Award badge for first course completion
-      const courseCount = await Certificate.countDocuments({ user: user._id });
-      if (courseCount === 1) {
-        user.badges = user.badges || [];
-        user.badges.push({
-          name: 'First Course',
-          description: 'Completed your first course on Skillverse',
-          icon: '🏆',
-          earnedAt: new Date()
-        });
-      }
-      
-      // Award badge for 5 courses
-      if (courseCount === 5) {
-        user.badges = user.badges || [];
-        user.badges.push({
-          name: 'Course Collector',
-          description: 'Completed 5 courses',
-          icon: '📚',
-          earnedAt: new Date()
-        });
-      }
-    }
+    await awardCourseCompletionRewards(user, certificate);
     
     await user.save();
 

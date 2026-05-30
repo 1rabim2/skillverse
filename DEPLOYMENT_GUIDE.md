@@ -1,6 +1,30 @@
 # SkillVerse Deployment & Quick Start Guide
 **Last Updated:** April 25, 2026
 
+## Final Local Verification
+
+Run these before every deployment:
+
+```bash
+cd frontend
+npm install
+npm run build
+npm run test:run
+
+cd ../backend
+npm install
+npm test
+```
+
+After production secrets are set in `backend/.env`, run:
+
+```bash
+cd backend
+npm run deploy:check
+```
+
+`deploy:check` intentionally fails if production values still look like localhost, test keys, weak secrets, or placeholders.
+
 ---
 
 ## 🚀 Quick Start (Development)
@@ -54,18 +78,26 @@ NODE_ENV=production
 # Google OAuth (get from console.cloud.google.com)
 GOOGLE_CLIENT_ID=<your-google-client-id>
 
+# Initial admin bootstrap. Change before first production start.
+ADMIN_EMAIL=<your-admin-email>
+ADMIN_PASSWORD=<strong-admin-password>
+
 # Email (for password resets)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
 SMTP_PASS=your-app-password
+SMTP_FROM=SkillVerse <no-reply@your-domain.com>
 
 # URLs
 BASE_URL=https://api.skillverse.com
 FRONTEND_URL=https://skillverse.com
+ADMIN_URL=https://skillverse.com
 
 # Payment (Khalti)
 KHALTI_SECRET_KEY=<live-secret-key>
+KHALTI_BASE_URL=<live-khalti-base-url>
+KHALTI_MONTHLY_AMOUNT=99900
 ```
 
 **Frontend Production Config** (`frontend/.env.local`):
@@ -165,7 +197,7 @@ mongodump -uri "mongodb+srv://user:pass@cluster.mongodb.net/skillverse" \
 ### Post-Launch Monitoring
 ```bash
 # Check server health
-curl https://skillverse.com/api/health
+curl https://api.skillverse.com/api/health
 
 # Monitor database
 # Dashboard: https://cloud.mongodb.com

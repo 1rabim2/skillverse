@@ -8,6 +8,7 @@
     "dev": "nodemon index.js",
     "seed:library": "node scripts/seedLibrary.js",
     "cleanup:course-titles": "node scripts/cleanupCopyCourseTitles.js",
+    "deploy:check": "node scripts/checkProductionEnv.js",
     "test": "node scripts/authSmokeTest.js"
   },
   "keywords": [],

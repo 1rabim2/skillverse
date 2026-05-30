@@ -1,5 +1,6 @@
 import React from 'react';
 import { apiFetch } from '../../lib/apiFetch';
+import { useToast } from '../../components/ui/ToastProvider';
 
 const STATUSES = [
   { value: '', label: 'All' },
@@ -22,6 +23,7 @@ function qs(params) {
 }
 
 export default function InstructorProjects() {
+  const toast = useToast();
   const [courses, setCourses] = React.useState([]);
   const [courseId, setCourseId] = React.useState('');
   const [items, setItems] = React.useState([]);
@@ -101,8 +103,9 @@ export default function InstructorProjects() {
       setEditing(null);
       setFeedback('');
       await load(page);
+      toast.success('Project review saved.');
     } catch (e) {
-      alert(e.message || 'Failed to save review');
+      toast.error(e.message || 'Failed to save review');
     } finally {
       setSaving(false);
     }
@@ -315,4 +318,3 @@ export default function InstructorProjects() {
     </div>
   );
 }
-

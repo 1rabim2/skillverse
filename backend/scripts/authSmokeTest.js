@@ -109,6 +109,10 @@ async function main() {
     assert.ok(jar.get('XSRF-TOKEN'), 'csrf cookie set');
     assert.equal(jar.get('XSRF-TOKEN'), csrfResp.json.token, 'cookie and payload csrf match');
 
+    const healthResp = await api('/api/health', { method: 'GET', csrf: false });
+    assert.equal(healthResp.status, 200, healthResp.text);
+    assert.equal(healthResp.json?.status, 'healthy');
+
     const email = `user_${Date.now()}@example.com`;
     const password = 'StrongPassw0rd!';
 

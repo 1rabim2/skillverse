@@ -1,54 +1,64 @@
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
-import Login from './pages/Login';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import Verify from './pages/Verify';
-import Dashboard from './pages/Dashboard';
-import Landing from './pages/Landing';
-import Courses from './pages/Courses';
-import SkillPaths from './pages/SkillPaths';
-import SkillPathDetail from './pages/SkillPathDetail';
-import Community from './pages/Community';
-import Portfolio from './pages/Portfolio';
-import Profile from './pages/Profile';
-import Leaderboard from './pages/Leaderboard';
-import QuizGame from './pages/QuizGame';
-import CourseDetail from './pages/CourseDetail';
-import CourseChat from './pages/CourseChat';
-import Certificates from './pages/Certificates';
-import MyProjects from './pages/MyProjects';
-import Subscribe from './pages/Subscribe';
-import SubscribeReturn from './pages/SubscribeReturn';
 import StudentLayout from './components/StudentLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import InstructorLayout from './components/instructor/InstructorLayout';
 import ProtectedAdminRoute from './components/admin/ProtectedAdminRoute';
 import AdminLayout from './components/admin/AdminLayout';
-import AdminLogin from './pages/admin/AdminLogin';
-import AdminDashboardHome from './pages/admin/AdminDashboardHome';
-import AdminCourses from './pages/admin/AdminCourses';
-import AdminUsers from './pages/admin/AdminUsers';
-import AdminSkillPaths from './pages/admin/AdminSkillPaths';
-import AdminCertificates from './pages/admin/AdminCertificates';
-import AdminCommunity from './pages/admin/AdminCommunity';
-import AdminSettings from './pages/admin/AdminSettings';
-import AdminProjects from './pages/admin/AdminProjects';
-import AdminSubscriptions from './pages/admin/AdminSubscriptions';
-import InstructorDashboard from './pages/instructor/InstructorDashboard';
-import InstructorCourses from './pages/instructor/InstructorCourses';
-import InstructorCreateCourse from './pages/instructor/InstructorCreateCourse';
-import InstructorEditCourse from './pages/instructor/InstructorEditCourse';
-import InstructorStudents from './pages/instructor/InstructorStudents';
-import InstructorLibrary from './pages/instructor/InstructorLibrary';
-import InstructorProjects from './pages/instructor/InstructorProjects';
-import InstructorMessages from './pages/instructor/InstructorMessages';
+
+const Login = React.lazy(() => import('./pages/Login'));
+const ForgotPassword = React.lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = React.lazy(() => import('./pages/ResetPassword'));
+const Verify = React.lazy(() => import('./pages/Verify'));
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Landing = React.lazy(() => import('./pages/Landing'));
+const Courses = React.lazy(() => import('./pages/Courses'));
+const SkillPaths = React.lazy(() => import('./pages/SkillPaths'));
+const SkillPathDetail = React.lazy(() => import('./pages/SkillPathDetail'));
+const Community = React.lazy(() => import('./pages/Community'));
+const Portfolio = React.lazy(() => import('./pages/Portfolio'));
+const Profile = React.lazy(() => import('./pages/Profile'));
+const Leaderboard = React.lazy(() => import('./pages/Leaderboard'));
+const QuizGame = React.lazy(() => import('./pages/QuizGame'));
+const CourseDetail = React.lazy(() => import('./pages/CourseDetail'));
+const CourseChat = React.lazy(() => import('./pages/CourseChat'));
+const Certificates = React.lazy(() => import('./pages/Certificates'));
+const MyProjects = React.lazy(() => import('./pages/MyProjects'));
+const Subscribe = React.lazy(() => import('./pages/Subscribe'));
+const SubscribeReturn = React.lazy(() => import('./pages/SubscribeReturn'));
+const AdminLogin = React.lazy(() => import('./pages/admin/AdminLogin'));
+const AdminDashboardHome = React.lazy(() => import('./pages/admin/AdminDashboardHome'));
+const AdminCourses = React.lazy(() => import('./pages/admin/AdminCourses'));
+const AdminUsers = React.lazy(() => import('./pages/admin/AdminUsers'));
+const AdminSkillPaths = React.lazy(() => import('./pages/admin/AdminSkillPaths'));
+const AdminCertificates = React.lazy(() => import('./pages/admin/AdminCertificates'));
+const AdminCommunity = React.lazy(() => import('./pages/admin/AdminCommunity'));
+const AdminSettings = React.lazy(() => import('./pages/admin/AdminSettings'));
+const AdminProjects = React.lazy(() => import('./pages/admin/AdminProjects'));
+const AdminSubscriptions = React.lazy(() => import('./pages/admin/AdminSubscriptions'));
+const InstructorDashboard = React.lazy(() => import('./pages/instructor/InstructorDashboard'));
+const InstructorCourses = React.lazy(() => import('./pages/instructor/InstructorCourses'));
+const InstructorCreateCourse = React.lazy(() => import('./pages/instructor/InstructorCreateCourse'));
+const InstructorEditCourse = React.lazy(() => import('./pages/instructor/InstructorEditCourse'));
+const InstructorStudents = React.lazy(() => import('./pages/instructor/InstructorStudents'));
+const InstructorLibrary = React.lazy(() => import('./pages/instructor/InstructorLibrary'));
+const InstructorProjects = React.lazy(() => import('./pages/instructor/InstructorProjects'));
+const InstructorMessages = React.lazy(() => import('./pages/instructor/InstructorMessages'));
+
+function PageLoader() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-slate-50 px-4 text-sm font-semibold text-slate-600 dark:bg-slate-950 dark:text-slate-300">
+      Loading...
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+      <React.Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
@@ -180,6 +190,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </React.Suspense>
       </BrowserRouter>
     </ErrorBoundary>
   );

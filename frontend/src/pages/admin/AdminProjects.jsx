@@ -1,5 +1,6 @@
 import React from 'react';
 import adminApi from '../../lib/adminApi';
+import { useToast } from '../../components/ui/ToastProvider';
 
 const STATUSES = [
   { value: '', label: 'All' },
@@ -10,6 +11,7 @@ const STATUSES = [
 ];
 
 export default function AdminProjects() {
+  const toast = useToast();
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
@@ -61,8 +63,9 @@ export default function AdminProjects() {
       setEditing(null);
       setFeedback('');
       await load(page);
+      toast.success('Project review saved.');
     } catch (e) {
-      alert(e?.response?.data?.error || e.message || 'Failed to save review');
+      toast.error(e?.response?.data?.error || e.message || 'Failed to save review');
     } finally {
       setSaving(false);
     }
@@ -266,4 +269,3 @@ export default function AdminProjects() {
     </div>
   );
 }
-

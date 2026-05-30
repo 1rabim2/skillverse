@@ -5,6 +5,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { apiFetch } from '../../lib/apiFetch';
 import { resolveAssetUrl } from '../../lib/assets';
+import { useToast } from '../../components/ui/ToastProvider';
 
 function qs(params) {
   const sp = new URLSearchParams();
@@ -20,6 +21,7 @@ function qs(params) {
 
 export default function InstructorLibrary() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [items, setItems] = React.useState([]);
   const [search, setSearch] = React.useState('');
   const [page, setPage] = React.useState(1);
@@ -69,9 +71,10 @@ export default function InstructorLibrary() {
       const res = await apiFetch(`/instructor/library-courses/${courseId}/clone`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to clone course');
+      toast.success('Course cloned. Opening the draft editor...');
       navigate(`/instructor/courses/${data?.course?._id}`);
     } catch (e) {
-      alert(e.message || 'Failed to clone course');
+      toast.error(e.message || 'Failed to clone course');
     } finally {
       setBusyId('');
     }
@@ -165,4 +168,3 @@ export default function InstructorLibrary() {
     </div>
   );
 }
-

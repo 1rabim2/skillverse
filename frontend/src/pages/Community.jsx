@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiFetch'
 import '../styles/community.css'
 import Button from '../components/ui/Button';
@@ -7,9 +8,9 @@ import Card from '../components/ui/Card';
 const LIST_LIMIT = 20
 const POLL_MS = 5000
 
-function formatTime(value) {
+function formatTime(value, locale) {
   try {
-    return new Date(value).toLocaleString()
+    return new Date(value).toLocaleString(locale)
   } catch {
     return ''
   }
@@ -43,6 +44,8 @@ function Stat({ label, value }) {
 }
 
 export default function Community() {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'ne' ? 'ne-NP' : 'en-US'
   const [authed, setAuthed] = React.useState(false)
   const [authChecked, setAuthChecked] = React.useState(false)
 
@@ -134,7 +137,7 @@ export default function Community() {
       if (nextPage === 1) setStats(data.stats || null)
     } catch (err) {
       if (err?.name === 'AbortError') return
-      setError(err?.message || 'Failed to load questions')
+      setError(err?.message || t('community.errors.loadQuestions'))
     } finally {
       setLoadingList(false)
     }
@@ -165,7 +168,7 @@ export default function Community() {
       }
     } catch (err) {
       if (err?.name === 'AbortError') return
-      setError(err?.message || 'Failed to load thread')
+      setError(err?.message || t('community.errors.loadThread'))
     } finally {
       if (!silent) setLoadingThread(false)
     }
@@ -228,7 +231,7 @@ export default function Community() {
       setSort('last_activity')
       await loadList({ nextPage: 1, mode: 'replace' })
     } catch (err) {
-      setError(err?.message || 'Failed to post question')
+      setError(err?.message || t('community.errors.postQuestion'))
     } finally {
       setAsking(false)
     }
@@ -252,7 +255,7 @@ export default function Community() {
       await loadThread(selectedId, { silent: true })
       await loadList({ nextPage: 1, mode: 'replace' })
     } catch (err) {
-      setError(err?.message || 'Failed to send reply')
+      setError(err?.message || t('community.errors.sendReply'))
     } finally {
       setCommentBusy(false)
     }
@@ -266,7 +269,7 @@ export default function Community() {
       await loadThread(id, { silent: true })
       await loadList({ nextPage: 1, mode: 'replace' })
     } catch (err) {
-      setError(err?.message || 'Failed to report post')
+      setError(err?.message || t('community.errors.reportPost'))
     }
   }
 
@@ -277,13 +280,13 @@ export default function Community() {
       await fetchJson(`/community/${encodeURIComponent(selectedId)}/comments/${encodeURIComponent(commentId)}/report`, { method: 'PATCH' })
       await loadThread(selectedId, { silent: true })
     } catch (err) {
-      setError(err?.message || 'Failed to report comment')
+      setError(err?.message || t('community.errors.reportComment'))
     }
   }
 
   async function deletePost() {
     if (!authed || !selectedId) return
-    if (!window.confirm('Delete this question?')) return
+    if (!window.confirm(t('community.confirmDeleteQuestion'))) return
     setError('')
     try {
       await fetchJson(`/community/${encodeURIComponent(selectedId)}`, { method: 'DELETE' })
@@ -291,7 +294,7 @@ export default function Community() {
       setThread(null)
       await loadList({ nextPage: 1, mode: 'replace' })
     } catch (err) {
-      setError(err?.message || 'Failed to delete post')
+      setError(err?.message || t('community.errors.deletePost'))
     }
   }
 
@@ -303,7 +306,7 @@ export default function Community() {
       await loadThread(selectedId, { silent: true })
       await loadList({ nextPage: 1, mode: 'replace' })
     } catch (err) {
-      setError(err?.message || 'Failed to delete comment')
+      setError(err?.message || t('community.errors.deleteComment'))
     }
   }
 
@@ -325,7 +328,7 @@ export default function Community() {
       await loadThread(selectedId, { silent: true })
       await loadList({ nextPage: 1, mode: 'replace' })
     } catch (err) {
-      setError(err?.message || 'Failed to update question')
+      setError(err?.message || t('community.errors.updateQuestion'))
     } finally {
       setEditBusy(false)
     }
@@ -341,11 +344,11 @@ export default function Community() {
     return (
       <div className="p-4">
         <Card className="p-6">
-          <div className="text-lg font-extrabold tracking-tight">Community</div>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Sign in to ask and answer questions.</p>
+          <div className="text-lg font-extrabold tracking-tight">{t('community.title')}</div>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('community.signInPrompt')}</p>
           <div className="mt-4">
             <Button variant="primary" onClick={() => { window.location.href = '/login' }}>
-              Go to login
+              {t('community.goToLogin')}
             </Button>
           </div>
         </Card>
@@ -357,14 +360,14 @@ export default function Community() {
     <div className="svc-wrap">
       <div className="svc-head">
         <div>
-          <div className="svc-title">Community</div>
-          <div className="svc-sub">Ask questions, help others, and learn together.</div>
+          <div className="svc-title">{t('community.title')}</div>
+          <div className="svc-sub">{t('community.subtitle')}</div>
         </div>
         <div className="svc-stats">
-          <Stat label="Approved" value={stats?.approvedPosts} />
-          <Stat label="Pending" value={stats?.pendingPosts} />
-          <Stat label="Answers" value={stats?.answersTotal} />
-          <Stat label="Mine" value={stats?.myPosts} />
+          <Stat label={t('community.stats.approved')} value={stats?.approvedPosts} />
+          <Stat label={t('community.stats.pending')} value={stats?.pendingPosts} />
+          <Stat label={t('community.stats.answers')} value={stats?.answersTotal} />
+          <Stat label={t('community.stats.mine')} value={stats?.myPosts} />
         </div>
       </div>
 
@@ -375,27 +378,27 @@ export default function Community() {
         <aside className={`svc-left ${selectedId ? 'mobile-hidden' : ''}`}>
           <div className="svc-controls">
             <button type="button" className="svc-primary" onClick={() => setAskOpen((v) => !v)}>
-              {askOpen ? 'Close' : 'Ask'}
+              {askOpen ? t('community.close') : t('community.ask')}
             </button>
             <button type="button" className="svc-btn" onClick={() => loadList({ nextPage: 1, mode: 'replace' })}>
-              Refresh
+              {t('community.refresh')}
             </button>
           </div>
 
           {askOpen && (
             <form className="svc-ask" onSubmit={submitAsk}>
-              <div className="svc-ask-title">Ask a question</div>
+              <div className="svc-ask-title">{t('community.askQuestion')}</div>
               <textarea
                 value={askText}
                 onChange={(e) => setAskText(e.target.value)}
                 rows={4}
-                placeholder="What are you stuck on? Include what you tried + error message."
+                placeholder={t('community.askPlaceholder')}
               />
               <div className="svc-ask-actions">
                 <button className="svc-primary" type="submit" disabled={asking || askText.trim().length < 8}>
-                  {asking ? 'Posting…' : 'Post'}
+                  {asking ? t('community.posting') : t('community.post')}
                 </button>
-                <div className="svc-hint">New questions are reviewed before going public.</div>
+                <div className="svc-hint">{t('community.reviewHint')}</div>
               </div>
             </form>
           )}
@@ -404,32 +407,32 @@ export default function Community() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search…"
+              placeholder={t('community.searchPlaceholder')}
             />
-            <button type="button" className="svc-btn" onClick={() => loadList({ nextPage: 1, mode: 'replace' })}>Go</button>
+            <button type="button" className="svc-btn" onClick={() => loadList({ nextPage: 1, mode: 'replace' })}>{t('community.go')}</button>
           </div>
 
           <div className="svc-row">
             <label className="svc-check">
               <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
-              My questions
+              {t('community.myQuestions')}
             </label>
             <select value={answered} onChange={(e) => setAnswered(e.target.value)}>
-              <option value="all">All</option>
-              <option value="unanswered">Unanswered</option>
-              <option value="answered">Answered</option>
+              <option value="all">{t('community.filters.all')}</option>
+              <option value="unanswered">{t('community.filters.unanswered')}</option>
+              <option value="answered">{t('community.filters.answered')}</option>
             </select>
             <select value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="last_activity">Last activity</option>
-              <option value="newest">Newest</option>
-              <option value="most_answered">Most answered</option>
-              <option value="oldest">Oldest</option>
+              <option value="last_activity">{t('community.sort.lastActivity')}</option>
+              <option value="newest">{t('community.sort.newest')}</option>
+              <option value="most_answered">{t('community.sort.mostAnswered')}</option>
+              <option value="oldest">{t('community.sort.oldest')}</option>
             </select>
           </div>
 
           <div className="svc-list">
-            {loadingList && <div className="svc-muted">Loading questions…</div>}
-            {!loadingList && items.length === 0 && <div className="svc-muted">No questions yet.</div>}
+            {loadingList && <div className="svc-muted">{t('community.loadingQuestions')}</div>}
+            {!loadingList && items.length === 0 && <div className="svc-muted">{t('community.noQuestions')}</div>}
 
             {items.map((q) => {
               const status = String(q.status || '').toLowerCase()
@@ -443,12 +446,12 @@ export default function Community() {
                 >
                   <div className="svc-q-top">
                     <div className="svc-q-author">{q.authorName}</div>
-                    {status !== 'approved' && q.isMine ? <span className="svc-pill warn">Pending</span> : null}
-                    <span className="svc-pill">{q.commentsCount || 0} replies</span>
+                    {status !== 'approved' && q.isMine ? <span className="svc-pill warn">{t('community.pending')}</span> : null}
+                    <span className="svc-pill">{t('community.replies', { count: q.commentsCount || 0 })}</span>
                   </div>
                   <div className="svc-q-body">{shortText(q.content, 120)}</div>
                   <div className="svc-q-meta">
-                    <span>Last: {formatTime(q.lastActivityAt || q.createdAt)}</span>
+                    <span>{t('community.last', { time: formatTime(q.lastActivityAt || q.createdAt, locale) })}</span>
                   </div>
                 </button>
               )
@@ -456,7 +459,7 @@ export default function Community() {
 
             {!loadingList && page < totalPages && (
               <button type="button" className="svc-btn full" onClick={() => loadList({ nextPage: page + 1, mode: 'append' })}>
-                Load more
+                {t('community.loadMore')}
               </button>
             )}
           </div>
@@ -466,8 +469,8 @@ export default function Community() {
         <section className={`svc-right ${selectedId ? '' : 'mobile-hidden'}`}>
           {!selectedId && (
             <div className="svc-empty">
-              <div className="svc-empty-title">Open a question</div>
-              <div className="svc-empty-sub">Select a question from the left to view and reply.</div>
+              <div className="svc-empty-title">{t('community.openQuestion')}</div>
+              <div className="svc-empty-sub">{t('community.openQuestionSub')}</div>
             </div>
           )}
 
@@ -475,21 +478,21 @@ export default function Community() {
             <>
               <div className="svc-thread-head">
                 <button type="button" className="svc-btn" onClick={() => { setSelectedId(''); setThread(null) }}>
-                  Back
+                  {t('common.back')}
                 </button>
-                <div className="svc-thread-title">Thread</div>
+                <div className="svc-thread-title">{t('community.thread')}</div>
                 <div className="svc-thread-actions">
                   <label className="svc-check">
                     <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} />
-                    Live
+                    {t('community.live')}
                   </label>
                   <button type="button" className="svc-btn" onClick={() => loadThread(selectedId, { silent: false })}>
-                    Refresh
+                    {t('community.refresh')}
                   </button>
                 </div>
               </div>
 
-              {loadingThread && <div className="svc-muted p-3">Loading thread…</div>}
+              {loadingThread && <div className="svc-muted p-3">{t('community.loadingThread')}</div>}
 
               {thread && (
                 <>
@@ -497,20 +500,20 @@ export default function Community() {
                     <div className="svc-question-top">
                       <div>
                         <div className="svc-question-author">{thread.authorName}</div>
-                        <div className="svc-question-time">{formatTime(thread.createdAt)}</div>
+                        <div className="svc-question-time">{formatTime(thread.createdAt, locale)}</div>
                       </div>
                       <div className="svc-question-actions">
-                        <button type="button" className="svc-btn" onClick={() => reportPost(thread._id)}>Report</button>
+                        <button type="button" className="svc-btn" onClick={() => reportPost(thread._id)}>{t('community.report')}</button>
                         {threadIsMine && String(thread.status || '').toLowerCase() === 'pending' && (
                           <button
                             type="button"
                             className="svc-btn"
                             onClick={() => { setEditOpen((v) => !v); setEditText((t) => t || thread.content) }}
                           >
-                            {editOpen ? 'Cancel edit' : 'Edit'}
+                            {editOpen ? t('community.cancelEdit') : t('community.edit')}
                           </button>
                         )}
-                        {threadIsMine && <button type="button" className="svc-danger" onClick={deletePost}>Delete</button>}
+                        {threadIsMine && <button type="button" className="svc-danger" onClick={deletePost}>{t('community.delete')}</button>}
                       </div>
                     </div>
 
@@ -519,9 +522,9 @@ export default function Community() {
                         <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={4} />
                         <div className="svc-edit-actions">
                           <button type="button" className="svc-primary" disabled={editBusy || editText.trim().length < 8} onClick={saveEdit}>
-                            {editBusy ? 'Saving…' : 'Save'}
+                            {editBusy ? t('community.saving') : t('community.save')}
                           </button>
-                          <button type="button" className="svc-btn" onClick={() => setEditOpen(false)}>Cancel</button>
+                          <button type="button" className="svc-btn" onClick={() => setEditOpen(false)}>{t('community.cancel')}</button>
                         </div>
                       </div>
                     ) : (
@@ -531,20 +534,20 @@ export default function Community() {
 
                   <div className="svc-messages" ref={threadScrollRef}>
                     {(thread.comments || []).length === 0 && (
-                      <div className="svc-muted p-3">No replies yet.</div>
+                      <div className="svc-muted p-3">{t('community.noReplies')}</div>
                     )}
                     {(thread.comments || []).map((m) => (
                       <div key={m._id} className={`svc-msg ${m.isMine ? 'mine' : ''}`}>
                         <div className="svc-msg-meta">
-                          <span className="svc-msg-name">{m.isMine ? 'You' : m.authorName}</span>
-                          <span className="svc-msg-time">{formatTime(m.createdAt)}</span>
+                          <span className="svc-msg-name">{m.isMine ? t('community.you') : m.authorName}</span>
+                          <span className="svc-msg-time">{formatTime(m.createdAt, locale)}</span>
                         </div>
                         <div className="svc-msg-bubble">{m.content}</div>
                         <div className="svc-msg-actions">
-                          <button type="button" className="svc-link" onClick={() => onReplyTo(m.authorName)}>Reply</button>
-                          <button type="button" className="svc-link" onClick={() => reportComment(m._id)}>Report</button>
+                          <button type="button" className="svc-link" onClick={() => onReplyTo(m.authorName)}>{t('community.reply')}</button>
+                          <button type="button" className="svc-link" onClick={() => reportComment(m._id)}>{t('community.report')}</button>
                           {m.isMine && (
-                            <button type="button" className="svc-link danger" onClick={() => deleteComment(m._id)}>Delete</button>
+                            <button type="button" className="svc-link danger" onClick={() => deleteComment(m._id)}>{t('community.delete')}</button>
                           )}
                         </div>
                       </div>
@@ -554,7 +557,7 @@ export default function Community() {
                   <div className="svc-compose">
                     {!threadIsApproved && threadIsMine && (
                       <div className="svc-muted pb-2">
-                        Your question is pending approval. Replies will open after approval.
+                        {t('community.pendingApprovalNote')}
                       </div>
                     )}
                     {threadIsApproved && (
@@ -563,7 +566,7 @@ export default function Community() {
                           ref={commentInputRef}
                           value={commentText}
                           onChange={(e) => setCommentText(e.target.value)}
-                          placeholder="Write a reply…"
+                          placeholder={t('community.replyPlaceholder')}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
@@ -577,11 +580,11 @@ export default function Community() {
                           disabled={commentBusy || commentText.trim().length < 2}
                           onClick={submitComment}
                         >
-                          {commentBusy ? 'Sending…' : 'Send'}
+                          {commentBusy ? t('community.sending') : t('community.send')}
                         </button>
                       </div>
                     )}
-                    <div className="svc-compose-hint">Live refresh checks for new replies every {Math.round(POLL_MS / 1000)}s.</div>
+                    <div className="svc-compose-hint">{t('community.liveHint', { seconds: Math.round(POLL_MS / 1000) })}</div>
                   </div>
                 </>
               )}

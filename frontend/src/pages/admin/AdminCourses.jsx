@@ -4,6 +4,7 @@ import adminApi from '../../lib/adminApi';
 import { uploadAdminImage, uploadAdminVideo } from '../../lib/uploads';
 import { resolveAssetUrl } from '../../lib/assets';
 import { displayCourseTitle } from '../../lib/displayUtils';
+import { useToast } from '../../components/ui/ToastProvider';
 
 function uid(prefix = 'id') {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
@@ -221,6 +222,7 @@ function PreviewModal({ open, onClose, form, lessons, skillPathTitle }) {
 }
 
 export default function AdminCourses() {
+  const toast = useToast();
   const [items, setItems] = React.useState([]);
   const [skillPaths, setSkillPaths] = React.useState([]);
   const [instructors, setInstructors] = React.useState([]);
@@ -354,15 +356,18 @@ export default function AdminCourses() {
 
   async function transferToInstructor() {
     if (!editingId) return;
-    if (!ownerInstructorId) return alert('Select an instructor first.');
+    if (!ownerInstructorId) {
+      toast.error('Select an instructor first.');
+      return;
+    }
     try {
       setRowBusyId(editingId);
       await adminApi.patch(`/courses/${editingId}/transfer-to-instructor`, { instructorId: ownerInstructorId });
       await load();
-      alert('Course transferred to instructor. It will appear on the instructor dashboard.');
+      toast.success('Course transferred to instructor. It will appear on the instructor dashboard.');
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || 'Failed to transfer course';
-      alert(msg);
+      toast.error(msg);
     } finally {
       setRowBusyId('');
     }
@@ -384,7 +389,7 @@ export default function AdminCourses() {
       await load();
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || 'Failed to delete course';
-      alert(msg);
+      toast.error(msg);
     } finally {
       setRowBusyId('');
     }
@@ -401,7 +406,7 @@ export default function AdminCourses() {
       setMenuOpenId('');
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || 'Failed to update course';
-      alert(msg);
+      toast.error(msg);
     } finally {
       setRowBusyId('');
     }
@@ -494,7 +499,7 @@ export default function AdminCourses() {
       const uploaded = await uploadAdminImage(file);
       setForm((prev) => ({ ...prev, thumbnailUrl: String(uploaded.url || '') }));
     } catch (err) {
-      alert(err?.message || 'Failed to upload image');
+      toast.error(err?.message || 'Failed to upload image');
     }
   }
 
@@ -504,7 +509,7 @@ export default function AdminCourses() {
       const uploaded = await uploadAdminVideo(file);
       updateLesson(lessonId, { videoUrl: String(uploaded.url || '') });
     } catch (err) {
-      alert(err?.message || 'Failed to upload video');
+      toast.error(err?.message || 'Failed to upload video');
     }
   }
 
@@ -512,14 +517,18 @@ export default function AdminCourses() {
     e.preventDefault();
 
     if (!editingId) {
-      alert('Course creation is disabled. Select a course from the list and edit/publish it instead.');
+      toast.info('Course creation is disabled. Select a course from the list and edit/publish it instead.');
       return;
     }
 
     const title = safeString(form.title).trim();
-    if (!title) return alert('Title is required');
+    if (!title) {
+      toast.error('Title is required');
+      return;
+    }
     if (lessons.length > 0 && lessons.some((ls) => safeString(ls.title).trim() === '')) {
-      return alert('Every lesson needs a title (or remove the empty lesson).');
+      toast.error('Every lesson needs a title (or remove the empty lesson).');
+      return;
     }
 
     const payload = {
@@ -537,9 +546,10 @@ export default function AdminCourses() {
       await adminApi.put(`/courses/${editingId}`, payload);
       resetForm();
       await load();
+      toast.success('Course saved.');
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || 'Failed to save course';
-      alert(msg);
+      toast.error(msg);
     }
   }
 
