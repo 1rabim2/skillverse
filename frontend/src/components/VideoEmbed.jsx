@@ -54,16 +54,16 @@ function embedInfo(url) {
   if (isMediaUrl(raw)) return { kind: 'video', src: raw };
 
   const yid = youtubeId(raw);
-  if (yid) return { kind: 'iframe', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(yid)}?rel=0` };
+  if (yid) return { kind: 'iframe', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(yid)}?rel=0`, href: raw };
 
   const vid = vimeoId(raw);
-  if (vid) return { kind: 'iframe', src: `https://player.vimeo.com/video/${encodeURIComponent(vid)}` };
+  if (vid) return { kind: 'iframe', src: `https://player.vimeo.com/video/${encodeURIComponent(vid)}`, href: raw };
 
   const drive = googleDrivePreview(raw);
-  if (drive) return { kind: 'iframe', src: drive };
+  if (drive) return { kind: 'iframe', src: drive, href: raw };
 
   // If it's already an embed/preview URL, try it directly.
-  if (/\/embed\/|\/preview\b/i.test(raw)) return { kind: 'iframe', src: raw };
+  if (/\/embed\/|\/preview\b/i.test(raw)) return { kind: 'iframe', src: raw, href: raw };
 
   return { kind: 'link', src: raw };
 }
@@ -112,10 +112,47 @@ export default function VideoEmbed({ url, title = 'Video' }) {
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
           />
         </div>
+        {info.href ? (
+          <a
+            href={info.href}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-flex',
+              marginTop: 10,
+              fontSize: 13,
+              fontWeight: 700,
+              color: '#4f46e5',
+              textDecoration: 'none'
+            }}
+          >
+            Open video link
+          </a>
+        ) : null}
       </div>
     );
   }
 
   // Fallback: provider doesn't allow embedding or unrecognized link.
-  return null;
+  return (
+    <div style={{ marginTop: 12 }}>
+      <a
+        href={info.src}
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          display: 'inline-flex',
+          border: '1px solid rgba(79,70,229,0.25)',
+          borderRadius: 12,
+          padding: '10px 14px',
+          fontSize: 14,
+          fontWeight: 800,
+          color: '#4f46e5',
+          textDecoration: 'none'
+        }}
+      >
+        Open video link
+      </a>
+    </div>
+  );
 }
