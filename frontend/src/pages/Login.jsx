@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Eye, EyeOff } from 'lucide-react';
 import { apiFetch } from '../lib/apiFetch';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -40,6 +41,7 @@ export default function Login() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [out, setOut] = useState('');
   const [isError, setIsError] = useState(false);
   // Legacy verification UI (email verification is disabled in the backend).
@@ -57,6 +59,7 @@ export default function Login() {
     setName('');
     setEmail('');
     setPassword('');
+    setShowPassword(false);
     setRole('student');
     setOut('');
     setIsError(false);
@@ -348,7 +351,24 @@ export default function Login() {
                   </div>
                   <div className="space-y-2">
                     <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{t('auth.password')}</div>
-                    <Input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
+                    <div className="relative">
+                      <Input
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        className="pr-12"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </div>
 
                   {googleClientId ? (
