@@ -10,6 +10,7 @@ const { notifyUser } = require('../utils/notifications');
 const { sendEmail } = require('../utils/email');
 
 const router = express.Router();
+const MAX_THUMBNAIL_URL_LENGTH = 10 * 1024 * 1024;
 
 function objectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -112,7 +113,7 @@ router.post('/library-courses/:id/clone', authMiddleware, requireRole('instructo
       description: safeString(source.description, 5000),
       category: safeString(source.category, 100) || 'General',
       level: safeString(source.level, 20) || 'Beginner',
-      thumbnailUrl: safeString(source.thumbnailUrl, 1000),
+      thumbnailUrl: safeString(source.thumbnailUrl, MAX_THUMBNAIL_URL_LENGTH),
       videoUrl: safeString(source.videoUrl, 1000),
       resourceLink: safeString(source.resourceLink, 1000),
       chapters: Array.isArray(source.chapters) ? source.chapters : [],

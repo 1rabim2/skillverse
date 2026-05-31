@@ -20,6 +20,10 @@ function getOriginalName(req) {
   return String(header || '').trim();
 }
 
+function imageDataUrl(buffer, mime) {
+  return `data:${mime};base64,${Buffer.from(buffer).toString('base64')}`;
+}
+
 router.post('/image', requireRole(['student', 'instructor']), rawParser('6mb'), async (req, res) => {
   try {
     const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
@@ -28,14 +32,14 @@ router.post('/image', requireRole(['student', 'instructor']), rawParser('6mb'), 
     if (!size) return res.status(400).json({ error: 'Empty upload' });
     if (size > 6 * 1024 * 1024) return res.status(413).json({ error: 'Image too large (max 6MB)' });
 
-    const stored = writeUpload({
-      buffer: Buffer.from(req.body),
+    const buffer = Buffer.from(req.body);
+    res.json({
+      url: imageDataUrl(buffer, mime),
+      fileName: getOriginalName(req),
       mime,
-      originalName: getOriginalName(req),
-      kind: 'images'
+      size,
+      storage: 'database'
     });
-
-    res.json({ url: stored.publicUrl, fileName: stored.fileName, mime, size });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Upload failed' });
   }

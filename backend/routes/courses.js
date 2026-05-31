@@ -8,6 +8,7 @@ const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 
 const router = express.Router();
+const MAX_THUMBNAIL_URL_LENGTH = 10 * 1024 * 1024;
 
 function isObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -137,7 +138,7 @@ router.post('/', authMiddleware, requireRole('instructor'), async (req, res) => 
     const category = pickString(req.body?.category, 100) || 'General';
     const level = pickString(req.body?.level, 20) || 'Beginner';
     const skillPath = req.body?.skillPath || null;
-    const thumbnailUrl = pickString(req.body?.thumbnailUrl, 1000);
+    const thumbnailUrl = pickString(req.body?.thumbnailUrl, MAX_THUMBNAIL_URL_LENGTH);
 
     if (!title) return res.status(400).json({ error: 'title is required' });
 
@@ -179,7 +180,7 @@ router.put('/:id', authMiddleware, requireRole('instructor'), async (req, res) =
     if (typeof next.description !== 'undefined') course.description = pickString(next.description, 5000);
     if (typeof next.category !== 'undefined') course.category = pickString(next.category, 100) || course.category;
     if (typeof next.level !== 'undefined') course.level = pickString(next.level, 20) || course.level;
-    if (typeof next.thumbnailUrl !== 'undefined') course.thumbnailUrl = pickString(next.thumbnailUrl, 1000);
+    if (typeof next.thumbnailUrl !== 'undefined') course.thumbnailUrl = pickString(next.thumbnailUrl, MAX_THUMBNAIL_URL_LENGTH);
     if (typeof next.videoUrl !== 'undefined') course.videoUrl = pickString(next.videoUrl, 1000);
     if (typeof next.resourceLink !== 'undefined') course.resourceLink = pickString(next.resourceLink, 1000);
     if (typeof next.skillPath !== 'undefined') course.skillPath = isObjectId(next.skillPath) ? next.skillPath : null;
