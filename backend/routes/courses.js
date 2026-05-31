@@ -20,6 +20,61 @@ function pickString(value, max = 5000) {
   return v;
 }
 
+function toNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function sanitizeChapters(chapters) {
+  if (!Array.isArray(chapters)) return [];
+
+  return chapters.map((chapter, chapterIndex) => {
+    const lessons = Array.isArray(chapter?.lessons) ? chapter.lessons : [];
+    return {
+      title: pickString(chapter?.title, 200) || `Chapter ${chapterIndex + 1}`,
+      order: toNumber(chapter?.order, chapterIndex),
+      lessons: lessons.map((lesson, lessonIndex) => {
+        const type = ['reading', 'video', 'quiz', 'project'].includes(String(lesson?.type || '').trim())
+          ? String(lesson.type).trim()
+          : 'reading';
+        const rawQuestions = Array.isArray(lesson?.quiz?.questions) ? lesson.quiz.questions : [];
+        const questions = rawQuestions
+          .map((q) => {
+            const prompt = pickString(q?.prompt, 1000);
+            const options = (Array.isArray(q?.options) ? q.options : [])
+              .map((opt) => pickString(opt, 500))
+              .filter(Boolean)
+              .slice(0, 4);
+            if (!prompt || options.length < 2) return null;
+            const correctIndexRaw = toNumber(q?.correctIndex, 0);
+            const correctIndex = Math.min(options.length - 1, Math.max(0, correctIndexRaw));
+            return {
+              prompt,
+              options,
+              correctIndex,
+              explanation: pickString(q?.explanation, 1000)
+            };
+          })
+          .filter(Boolean);
+
+        return {
+          title: pickString(lesson?.title, 200) || `${type.charAt(0).toUpperCase()}${type.slice(1)} ${lessonIndex + 1}`,
+          type,
+          content: pickString(lesson?.content, 10000),
+          videoUrl: pickString(lesson?.videoUrl, 1000),
+          resourceLink: pickString(lesson?.resourceLink, 1000),
+          durationMin: Math.max(0, toNumber(lesson?.durationMin, 0)),
+          order: toNumber(lesson?.order, lessonIndex),
+          quiz: {
+            passPercent: Math.min(100, Math.max(0, toNumber(lesson?.quiz?.passPercent, 60))),
+            questions
+          }
+        };
+      })
+    };
+  });
+}
+
 // Instructor: list own courses
 router.get('/mine', authMiddleware, requireRole('instructor'), async (req, res) => {
   try {
@@ -129,8 +184,8 @@ router.put('/:id', authMiddleware, requireRole('instructor'), async (req, res) =
     if (typeof next.resourceLink !== 'undefined') course.resourceLink = pickString(next.resourceLink, 1000);
     if (typeof next.skillPath !== 'undefined') course.skillPath = isObjectId(next.skillPath) ? next.skillPath : null;
 
-    // Chapters/lessons/quizzes are embedded. Instructors can update them wholesale.
-    if (Array.isArray(next.chapters)) course.chapters = next.chapters;
+    // Chapters/lessons/quizzes are embedded. Clean them before saving so partially-filled UI drafts do not fail validation.
+    if (Array.isArray(next.chapters)) course.chapters = sanitizeChapters(next.chapters);
 
     // If an instructor edits an approved/published course, it becomes a draft again and must be re-approved.
     if (course.status === 'published' || course.isApproved === true) {
@@ -144,7 +199,11 @@ router.put('/:id', authMiddleware, requireRole('instructor'), async (req, res) =
     await course.save();
     res.json({ course });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update course' });
+    if (err?.name === 'ValidationError') {
+      const details = Object.values(err.errors || {}).map((e) => e.message).filter(Boolean);
+      return res.status(400).json({ error: details[0] || 'Course validation failed', details });
+    }
+    res.status(500).json({ error: err?.message || 'Failed to update course' });
   }
 });
 
