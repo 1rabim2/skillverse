@@ -90,6 +90,7 @@ router.post('/auth/login', adminAuthLimiter, async (req, res) => {
     const { email, password } = req.body;
     const normalizedEmail = String(email || '').trim().toLowerCase();
     if (!normalizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (!validateEmail(normalizedEmail)) return res.status(400).json({ error: 'Invalid email format' });
     const admin = await Admin.findOne(emailFilter(normalizedEmail));
     if (!admin) return res.status(401).json({ error: 'Invalid credentials' });
     if (!admin.isActive) return res.status(403).json({ error: 'Admin is deactivated' });

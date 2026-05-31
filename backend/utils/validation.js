@@ -34,8 +34,25 @@ function validatePassword(password) {
 }
 
 function validateEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  const value = String(email || '').trim().toLowerCase();
+  if (!value || value.length > 254) return false;
+  if (value.includes('..')) return false;
+
+  const emailRegex = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@([a-z0-9-]+\.)+[a-z]{2,24}$/i;
+  if (!emailRegex.test(value)) return false;
+
+  const [local, domain] = value.split('@');
+  if (!local || !domain || local.length > 64) return false;
+  if (local.startsWith('.') || local.endsWith('.')) return false;
+
+  const labels = domain.split('.');
+  if (labels.some((part) => !part || part.startsWith('-') || part.endsWith('-'))) return false;
+
+  const tld = labels[labels.length - 1];
+  const commonTypos = new Set(['con', 'cim', 'vom', 'comm', 'cmo', 'cm', 'om']);
+  if (commonTypos.has(tld)) return false;
+
+  return true;
 }
 
 function validateName(name) {

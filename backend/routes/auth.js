@@ -136,6 +136,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const { email, password } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
     if (!normalizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (!validateEmail(normalizedEmail)) return res.status(400).json({ error: 'Invalid email format' });
 
     // Unified login for users and admins (admins are created manually).
     const admin = await Admin.findOne(emailFilter(normalizedEmail));
@@ -290,6 +291,7 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
     const { email } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
     if (!normalizedEmail) return res.status(400).json({ error: 'Email required' });
+    if (!validateEmail(normalizedEmail)) return res.status(400).json({ error: 'Invalid email format' });
 
     const user = await User.findOne(emailFilter(normalizedEmail));
     // Generic response to avoid revealing whether the email exists
